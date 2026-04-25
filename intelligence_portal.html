@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Bloomberg Intelligence Portal</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --surface: #16213e;
+  --surface2: #0f3460;
+  --accent: #e94560;
+  --accent2: #533483;
+  --text: #eee;
+  --text-secondary: #aaa;
+  --border: #333;
+  --shadow: 0 2px 10px rgba(0,0,0,0.3);
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+header h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+header p {
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+/* Hot Topics Section */
+.hot-topics {
+  margin-bottom: 40px;
+}
+
+.hot-topics h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topic-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+  transition: all 0.3s;
+}
+
+.topic-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.topic-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.topic-title {
+  font-size: 20px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.topic-heat {
+  background: var(--accent);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.topic-summary {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  font-size: 15px;
+}
+
+.topic-sources {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.source-tag {
+  background: var(--surface2);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.insight-box {
+  background: var(--surface2);
+  border-left: 4px solid var(--accent);
+  padding: 16px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin-top: 16px;
+}
+
+.insight-box h4 {
+  color: var(--accent);
+  font-size: 14px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.insight-box p {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Trend Section */
+.trends {
+  margin-bottom: 40px;
+}
+
+.trends h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.trend-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.trend-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--accent);
+}
+
+.trend-card p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.trend-card .trend-direction {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.trend-up { color: #4ade80; }
+.trend-down { color: #f87171; }
+.trend-neutral { color: #fbbf24; }
+
+/* Recent Newsletters */
+.recent {
+  margin-bottom: 40px;
+}
+
+.recent h2 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.newsletter-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.newsletter-item {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.newsletter-item:last-child {
+  border-bottom: none;
+}
+
+.newsletter-title {
+  font-size: 15px;
+  flex: 1;
+}
+
+.newsletter-date {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-left: 16px;
+}
+
+.newsletter-source {
+  background: var(--surface2);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-left: 12px;
+}
+
+/* Empty State */
+.empty {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-secondary);
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>📊 Bloomberg Intelligence</h1>
+    <p>AI-powered insights from your Bloomberg newsletters</p>
+  </header>
+  
+  <div class="hot-topics">
+    <h2>🔥 Hot Topics This Week</h2>
+    <div id="hot-topics-list">
+      <div class="loading">Loading insights...</div>
+    </div>
+  </div>
+  
+  <div class="trends">
+    <h2>📈 Emerging Trends</h2>
+    <div class="trend-grid" id="trends-list">
+      <div class="loading">Loading trends...</div>
+    </div>
+  </div>
+  
+  <div class="recent">
+    <h2>📰 Recent Newsletters</h2>
+    <div class="newsletter-list" id="recent-list">
+      <div class="loading">Loading newsletters...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Sample data structure
+const sampleData = {
+  hotTopics: [
+    {
+      title: "Fed Rate Cut Expectations",
+      heat: "High",
+      summary: "Multiple newsletters this week discuss the Fed's potential rate cut trajectory. Key indicators suggest a more hawkish stance than market expectations.",
+      sources: ["Bloomberg Markets", "The Daily Shot", "Morning Brew"],
+      insight: "The divergence between market pricing (3 cuts) and Fed dot plot (1-2 cuts) suggests potential volatility ahead. Watch the next FOMC meeting for clarification."
+    },
+    {
+      title: "AI Infrastructure Spending",
+      heat: "Medium",
+      summary: "Tech giants continue to increase AI infrastructure spending despite concerns about ROI. Data center demand remains strong.",
+      sources: ["Bloomberg Tech", "The Information"],
+      insight: "The AI capex cycle is accelerating, not peaking. This suggests continued strength in semiconductor and cloud infrastructure stocks."
+    }
+  ],
+  trends: [
+    {
+      title: "Dollar Strength",
+      direction: "up",
+      description: "USD strengthening against major currencies due to relative economic outperformance."
+    },
+    {
+      title: "Oil Volatility",
+      direction: "neutral",
+      description: "Geopolitical tensions creating uncertainty in energy markets."
+    },
+    {
+      title: "Tech Rotation",
+      direction: "down",
+      description: "Rotation from mega-cap tech to value stocks continuing."
+    }
+  ],
+  recentNewsletters: [
+    {
+      title: "The Daily Shot: Market Overview",
+      date: "2026-04-25",
+      source: "Bloomberg"
+    },
+    {
+      title: "Morning Brew: Tech Earnings Preview",
+      date: "2026-04-25",
+      source: "Morning Brew"
+    },
+    {
+      title: "Bloomberg Markets: Fed Watch",
+      date: "2026-04-24",
+      source: "Bloomberg"
+    }
+  ]
+};
+
+// Render functions
+function renderHotTopics(topics) {
+  const container = document.getElementById('hot-topics-list');
+  if (!topics || topics.length === 0) {
+    container.innerHTML = '<div class="empty">No hot topics identified yet. Check back after more newsletters are processed.</div>';
+    return;
+  }
+  
+  container.innerHTML = topics.map(topic => `
+    <div class="topic-card">
+      <div class="topic-header">
+        <div class="topic-title">${topic.title}</div>
+        <div class="topic-heat">${topic.heat}</div>
+      </div>
+      <div class="topic-summary">${topic.summary}</div>
+      <div class="topic-sources">
+        ${topic.sources.map(s => `<span class="source-tag">${s}</span>`).join('')}
+      </div>
+      <div class="insight-box">
+        <h4>💡 AI Insight</h4>
+        <p>${topic.insight}</p>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTrends(trends) {
+  const container = document.getElementById('trends-list');
+  if (!trends || trends.length === 0) {
+    container.innerHTML = '<div class="empty">No trends identified yet.</div>';
+    return;
+  }
+  
+  container.innerHTML = trends.map(trend => `
+    <div class="trend-card">
+      <h3>${trend.title}</h3>
+      <p>${trend.description}</p>
+      <div class="trend-direction trend-${trend.direction}">
+        ${trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'} 
+        ${trend.direction === 'up' ? 'Rising' : trend.direction === 'down' ? 'Falling' : 'Stable'}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderRecentNewsletters(newsletters) {
+  const container = document.getElementById('recent-list');
+  if (!newsletters || newsletters.length === 0) {
+    container.innerHTML = '<div class="empty">No newsletters processed yet.</div>';
+    return;
+  }
+  
+  container.innerHTML = newsletters.map(n => `
+    <div class="newsletter-item">
+      <div class="newsletter-title">${n.title}</div>
+      <div class="newsletter-date">${n.date}</div>
+      <div class="newsletter-source">${n.source}</div>
+    </div>
+  `).join('');
+}
+
+// Load data from API
+async function loadData() {
+  try {
+    // In production, this would fetch from the backend
+    // For now, use sample data
+    renderHotTopics(sampleData.hotTopics);
+    renderTrends(sampleData.trends);
+    renderRecentNewsletters(sampleData.recentNewsletters);
+  } catch (e) {
+    console.error('Failed to load data:', e);
+  }
+}
+
+// Initialize
+loadData();
+</script>
+
+</body>
+</html>
