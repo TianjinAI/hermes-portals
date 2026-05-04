@@ -1,0 +1,16 @@
+请为以下内容生成简洁的中文摘要。
+
+标题: 只要你会Python，那么你一定要学大模型！
+类别: rss
+
+内容:
+Unfortunately, Youtube does not provide subtitles for this video
+
+请用JSON格式输出:
+{
+  "summary": "2-3句话的摘要，概括核心内容",
+  "key_points": ["关键点1", "关键点2", "关键点3"],
+  "topics": ["主题1", "主题2"]
+}
+
+只输出JSON，不要其他内容。

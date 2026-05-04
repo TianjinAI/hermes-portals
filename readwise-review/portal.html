@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📚 Readwise Review Portal</title>
+<style>
+:root {
+  --bg: #FAFAF5;
+  --surface: #FFFFFF;
+  --border: #E5E5E0;
+  --text: #1A1A1A;
+  --text-secondary: #6B6B6B;
+  --accent: #4A9B6B;
+  --accent-hover: #3D8059;
+  --danger: #C44B4B;
+  --warning: #D4A843;
+  --info: #4A7FB5;
+  --sidebar-bg: #2C2C2C;
+  --sidebar-text: #E0E0E0;
+  --sidebar-active: #4A9B6B;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  padding: 20px 0;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 0 20px 20px;
+  border-bottom: 1px solid #3C3C3C;
+}
+
+.sidebar-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-header .stats {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #999;
+}
+
+.sidebar-header .stats .count {
+  color: #FFFFFF;
+  font-weight: 600;
+}
+
+.nav-section {
+  padding: 16px 0;
+  border-bottom: 1px solid #3C3C3C;
+}
+
+.nav-section-title {
+  padding: 0 20px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #666;
+  font-weight: 600;
+}
+
+.nav-item {
+  padding: 8px 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.nav-item:hover {
+  background: #3C3C3C;
+}
+
+.nav-item.active {
+  background: var(--sidebar-active);
+  color: #FFFFFF;
+}
+
+.nav-item .icon {
+  width: 20px;
+  text-align: center;
+}
+
+.nav-item .badge {
+  margin-left: auto;
+  background: #3C3C3C;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.nav-item.active .badge {
+  background: rgba(255,255,255,0.2);
+}
+
+/* Main Content */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.date-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-filter input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+
+.date-filter button {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.item-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+  transition: all 0.2s;
+}
+
+.item-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.item-title {
+  font-size: 16px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.item-title a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.item-title a:hover {
+  color: var(--accent);
+}
+
+.item-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge-email { background: #E3F2FD; color: #1565C0; }
+.badge-rss { background: #FFF3E0; color: #E65100; }
+.badge-article { background: #E8F5E9; color: #2E7D32; }
+.badge-podcast { background: #F3E5F5; color: #7B1FA2; }
+.badge-youtube { background: #FFEBEE; color: #C62828; }
+.badge-video { background: #FFEBEE; color: #C62828; }
+.badge-pdf { background: #EFEBE9; color: #4E342E; }
+
+.item-summary {
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.detailed-summary {
+  background: var(--bg);
+  border-left: 4px solid var(--accent);
+  padding: 16px;
+  margin-bottom: 16px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.detailed-summary h4 {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+
+.detailed-summary ul {
+  margin-left: 20px;
+  margin-bottom: 8px;
+}
+
+.detailed-summary li {
+  margin-bottom: 4px;
+}
+
+.key-points {
+  margin-bottom: 16px;
+}
+
+.key-points h4 {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.key-points ul {
+  list-style: none;
+  padding: 0;
+}
+
+.key-points li {
+  font-size: 14px;
+  padding: 4px 0;
+  padding-left: 20px;
+  position: relative;
+}
+
+.key-points li:before {
+  content: "•";
+  position: absolute;
+  left: 8px;
+  color: var(--accent);
+}
+
+.topics {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.topic-tag {
+  padding: 2px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-keep {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-keep:hover {
+  background: var(--accent-hover);
+}
+
+.btn-discard {
+  background: var(--danger);
+  color: white;
+}
+
+.btn-discard:hover {
+  background: #A33D3D;
+}
+
+.btn-investigate {
+  background: var(--warning);
+  color: white;
+}
+
+.btn-investigate:hover {
+  background: #B8923A;
+}
+
+.decided {
+  opacity: 0.6;
+}
+
+.decision-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.decision-keep { background: #E8F5E9; color: #2E7D32; }
+.decision-discard { background: #FFEBEE; color: #C62828; }
+.decision-investigate { background: #FFF3E0; color: #E65100; }
+
+.empty {
+  text-align: center;
+  padding: 60px;
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+/* Toggle detailed view */
+.toggle-detailed {
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toggle-detailed:hover {
+  text-decoration: underline;
+}
+
+.detailed-content {
+  display: none;
+}
+
+.detailed-content.show {
+  display: block;
+}
+
+/* ---- Markdown-rendered detailed summary (mistune output) ---- */
+.detailed-summary h1 { font-size: 18px; font-weight: 800; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 6px; margin: 0 0 10px 0; }
+.detailed-summary h2 { font-size: 15px; font-weight: 700; color: var(--text); margin: 16px 0 6px 0; }
+.detailed-summary h3 { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin: 12px 0 4px 0; }
+.detailed-summary p { margin: 0 0 8px 0; line-height: 1.6; }
+.detailed-summary ul, .detailed-summary ol { margin: 0 0 8px 0; padding-left: 18px; }
+.detailed-summary li { margin-bottom: 3px; line-height: 1.5; }
+.detailed-summary strong { color: var(--text); }
+.detailed-summary code { background: #F0F0EB; padding: 1px 4px; border-radius: 3px; font-size: 12px; color: var(--accent); }
+.detailed-summary pre { background: #F5F5F0; border: 1px solid var(--border); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 0 0 10px 0; }
+.detailed-summary pre code { background: none; padding: 0; color: var(--text-secondary); }
+.detailed-summary blockquote { border-left: 3px solid var(--accent); margin: 0 0 10px 0; padding: 6px 12px; background: #F5FAF3; border-radius: 0 6px 6px 0; }
+.detailed-summary blockquote p { margin: 0 0 4px 0; font-style: italic; }
+.detailed-summary blockquote p:last-child { margin-bottom: 0; }
+.detailed-summary table { width: 100%; border-collapse: collapse; margin: 0 0 10px 0; font-size: 12px; }
+.detailed-summary th { text-align: left; padding: 6px 8px; background: #F5F5F0; border-bottom: 2px solid var(--border); color: var(--text); font-weight: 700; }
+.detailed-summary td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.detailed-summary hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+.detailed-summary a { color: var(--accent); text-decoration: none; }
+.detailed-summary a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <h1>📚 Readwise</h1>
+    <div class="stats">
+      今日: <span class="count" id="today-count">0</span> · 
+      历史: <span class="count" id="history-count">0</span>
+    </div>
+  </div>
+  
+  <div class="nav-section">
+    <div class="nav-section-title">状态</div>
+    <div class="nav-item active" data-filter="pending">
+      <span class="icon">📋</span>
+      待审
+      <span class="badge" id="pending-badge">0</span>
+    </div>
+    <div class="nav-item" data-filter="keep">
+      <span class="icon">✅</span>
+      已保留
+      <span class="badge" id="keep-badge">0</span>
+    </div>
+    <div class="nav-item" data-filter="discard">
+      <span class="icon">❌</span>
+      已丢弃
+      <span class="badge" id="discard-badge">0</span>
+    </div>
+    <div class="nav-item" data-filter="investigate">
+      <span class="icon">🔍</span>
+      待研究
+      <span class="badge" id="investigate-badge">0</span>
+    </div>
+  </div>
+  
+  <div class="nav-section">
+    <div class="nav-section-title">分类</div>
+    <div class="nav-item" data-filter="email">
+      <span class="icon">📧</span>
+      邮件通讯
+      <span class="badge" id="email-badge">0</span>
+    </div>
+    <div class="nav-item" data-filter="rss">
+      <span class="icon">📰</span>
+      RSS订阅
+      <span class="badge" id="rss-badge">0</span>
+    </div>
+    <div class="nav-item" data-filter="youtube">
+      <span class="icon">🎥</span>
+      YouTube
+      <span class="badge" id="youtube-badge">0</span>
+    </div>
+    <div class="nav-item" data-filter="podcast">
+      <span class="icon">🎙️</span>
+      播客
+      <span class="badge" id="podcast-badge">0</span>
+    </div>
+    <div class="nav-item" data-filter="article">
+      <span class="icon">📄</span>
+      文章
+      <span class="badge" id="article-badge">0</span>
+    </div>
+  </div>
+  
+  <div class="nav-section">
+    <div class="nav-section-title">历史</div>
+    <div class="nav-item" data-filter="history">
+      <span class="icon">📁</span>
+      历史记录
+      <span class="badge" id="history-items-badge">0</span>
+    </div>
+  </div>
+</aside>
+
+<main class="main">
+  <header class="header">
+    <div class="header-left">
+      <h2 id="view-title">📋 待审项目</h2>
+    </div>
+    <div class="date-filter">
+      <input type="date" id="date-picker">
+      <button onclick="loadDate()">加载</button>
+    </div>
+  </header>
+  
+  <div class="content" id="item-list">
+    <div class="empty">加载中...</div>
+  </div>
+</main>
+
+<script>
+let state = { items: [], decisions: {}, history_count: 0 };
+let currentFilter = 'pending';
+let currentDate = new Date().toISOString().split('T')[0];
+
+async function loadState() {
+  try {
+    const resp = await fetch(`/api/state?date=${currentDate}`);
+    state = await resp.json();
+    // Sync the date picker
+    document.getElementById('date-picker').value = currentDate;
+    updateBadges();
+    render();
+  } catch (e) {
+    console.error('Failed to load state:', e);
+  }
+}
+
+async function loadDate() {
+  const date = document.getElementById('date-picker').value;
+  currentDate = date;
+  try {
+    const resp = await fetch(`/api/state?date=${date}`);
+    state = await resp.json();
+    updateBadges();
+    render();
+  } catch (e) {
+    console.error('Failed to load date:', e);
+  }
+}
+
+async function makeDecision(itemId, decision) {
+  try {
+    const resp = await fetch('/api/decide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: itemId, decision })
+    });
+    const result = await resp.json();
+    if (result.success) {
+      state.decisions[itemId] = decision;
+      updateBadges();
+      render();
+    }
+  } catch (e) {
+    console.error('Failed to make decision:', e);
+  }
+}
+
+function updateBadges() {
+  const items = state.items;
+  const decisions = state.decisions;
+  
+  const pending = items.filter(i => !decisions[i.id]).length;
+  const keep = items.filter(i => decisions[i.id] === 'keep').length;
+  const discard = items.filter(i => decisions[i.id] === 'discard').length;
+  const investigate = items.filter(i => decisions[i.id] === 'investigate').length;
+  
+  document.getElementById('today-count').textContent = items.length;
+  document.getElementById('history-count').textContent = state.history_count || 0;
+  
+  document.getElementById('pending-badge').textContent = pending;
+  document.getElementById('keep-badge').textContent = keep;
+  document.getElementById('discard-badge').textContent = discard;
+  document.getElementById('investigate-badge').textContent = investigate;
+  
+  // Category badges
+  const cats = {};
+  items.forEach(i => {
+    const cat = i.category || 'other';
+    cats[cat] = (cats[cat] || 0) + 1;
+  });
+  
+  document.getElementById('email-badge').textContent = cats.email || 0;
+  document.getElementById('rss-badge').textContent = cats.rss || 0;
+  document.getElementById('youtube-badge').textContent = (cats.youtube || 0) + (cats.video || 0);
+  document.getElementById('podcast-badge').textContent = cats.podcast || 0;
+  document.getElementById('article-badge').textContent = cats.article || 0;
+  document.getElementById('history-items-badge').textContent = state.history_count || 0;
+}
+
+function getFilteredItems() {
+  let items = state.items;
+  const decisions = state.decisions;
+  
+  if (currentFilter === 'pending') {
+    items = items.filter(i => !decisions[i.id]);
+  } else if (currentFilter === 'keep') {
+    items = items.filter(i => decisions[i.id] === 'keep');
+  } else if (currentFilter === 'discard') {
+    items = items.filter(i => decisions[i.id] === 'discard');
+  } else if (currentFilter === 'investigate') {
+    items = items.filter(i => decisions[i.id] === 'investigate');
+  } else if (['email', 'rss', 'youtube', 'podcast', 'article'].includes(currentFilter)) {
+    items = items.filter(i => i.category === currentFilter || 
+      (currentFilter === 'youtube' && i.category === 'video'));
+  } else if (currentFilter === 'history') {
+    items = []; // History is loaded separately
+  }
+  
+  return items;
+}
+
+function getCategoryBadge(category) {
+  const badges = {
+    email: 'badge-email',
+    rss: 'badge-rss',
+    article: 'badge-article',
+    podcast: 'badge-podcast',
+    youtube: 'badge-youtube',
+    video: 'badge-video',
+    pdf: 'badge-pdf'
+  };
+  return badges[category] || 'badge-article';
+}
+
+function getCategoryLabel(category) {
+  const labels = {
+    email: '📧 邮件',
+    rss: '📰 RSS',
+    article: '📄 文章',
+    podcast: '🎙️ 播客',
+    youtube: '🎥 YouTube',
+    video: '🎥 视频',
+    pdf: '📑 PDF'
+  };
+  return labels[category] || category;
+}
+
+function toggleDetailed(itemId) {
+  const el = document.getElementById(`detailed-${itemId}`);
+  el.classList.toggle('show');
+}
+
+function render() {
+  const items = getFilteredItems();
+  const list = document.getElementById('item-list');
+  
+  // Update title
+  const titles = {
+    pending: '📋 待审项目',
+    keep: '✅ 已保留',
+    discard: '❌ 已丢弃',
+    investigate: '🔍 待研究',
+    email: '📧 邮件通讯',
+    rss: '📰 RSS订阅',
+    youtube: '🎥 YouTube',
+    podcast: '🎙️ 播客',
+    article: '📄 文章',
+    history: '📁 历史记录'
+  };
+  document.getElementById('view-title').textContent = titles[currentFilter] || '📋 待审项目';
+  
+  if (currentFilter === 'history') {
+    list.innerHTML = '<div class="empty">📁 历史记录包含 ' + (state.history_count || 0) + ' 个项目</div>';
+    return;
+  }
+  
+  if (items.length === 0) {
+    list.innerHTML = '<div class="empty">🎉 没有待审项目</div>';
+    return;
+  }
+  
+  list.innerHTML = items.map(item => {
+    const decision = state.decisions[item.id];
+    const decidedClass = decision ? 'decided' : '';
+    const summary = item.summary || {};
+    
+    return `
+      <div class="item-card ${decidedClass}" id="item-${item.id}">
+        <div class="item-header">
+          <div class="item-title">
+            <a href="${item.url}" target="_blank">${item.title}</a>
+          </div>
+          ${decision ? `<span class="decision-badge decision-${decision}">${
+            decision === 'keep' ? '✅ 已保留' :
+            decision === 'discard' ? '❌ 已丢弃' :
+            '🔍 待研究'
+          }</span>` : ''}
+        </div>
+        <div class="item-meta">
+          <span class="badge ${getCategoryBadge(item.category)}">${getCategoryLabel(item.category)}</span>
+          <span>${item.author}</span>
+          <span>${item.published_date ? new Date(item.published_date).toLocaleDateString('zh-CN') : ''}</span>
+        </div>
+        <div class="item-summary">${summary.summary || '等待处理...'}</div>
+        
+        ${summary.detailed_summary ? `
+          <div class="toggle-detailed" onclick="toggleDetailed('${item.id}')">
+            📋 查看详细摘要
+          </div>
+          <div class="detailed-content" id="detailed-${item.id}">
+            <div class="detailed-summary">
+              ${summary.detailed_summary_html || summary.detailed_summary.replace(/\n/g, '<br>')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${summary.key_points && summary.key_points.length > 0 ? `
+          <div class="key-points">
+            <h4>关键点:</h4>
+            <ul>
+              ${summary.key_points.map(p => `<li>${p}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        
+        ${summary.topics && summary.topics.length > 0 ? `
+          <div class="topics">
+            ${summary.topics.map(t => `<span class="topic-tag">${t}</span>`).join('')}
+          </div>
+        ` : ''}
+        
+        <div class="actions">
+          <button class="btn btn-keep" onclick="makeDecision('${item.id}', 'keep')">✅ 保留</button>
+          <button class="btn btn-discard" onclick="makeDecision('${item.id}', 'discard')">❌ 丢弃</button>
+          <button class="btn btn-investigate" onclick="makeDecision('${item.id}', 'investigate')">🔍 研究</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Navigation
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    currentFilter = item.dataset.filter;
+    render();
+  });
+});
+
+// Load on start
+loadState();
+
+// Auto-refresh disabled — was causing expanded summaries to collapse.
+// Use the "加载" button to manually refresh.
+// setInterval(loadDate, 30000);
+</script>
+
+</body>
+</html>

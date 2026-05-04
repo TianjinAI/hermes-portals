@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>VPS Monitor</title>
+<style>
+:root{--bg:#080c12;--surface:#0f1419;--card:#141a21;--border:#1e2833;--text:#dde4ec;--muted:#6b7d8e;--accent:#3b82f6;--green:#22c55e;--yellow:#eab308;--red:#ef4444;--r:10px}.light{--bg:#eff1f5;--surface:#ffffff;--card:#f5f6f8;--border:#dce0e8;--text:#1a1d23;--muted:#8b95a5;--accent:#2563eb;--green:#16a34a;--yellow:#ca8a04;--red:#dc2626}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:16px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:16px}
+.logo{font-weight:700;font-size:15px}.logo span{color:var(--accent)}
+.pills{display:flex;gap:10px}
+.pill{padding:4px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:12px}.pill b{color:var(--accent)}
+.dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;background:var(--green);box-shadow:0 0 6px var(--green)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.c{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.ct{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:12px}
+.gauge{display:flex;align-items:flex-end;gap:8px}
+.gb{flex:1;height:24px;background:var(--card);border-radius:4px;overflow:hidden;display:flex}
+.gf{height:100%;transition:width .4s}
+.gf.app{background:linear-gradient(90deg,#dc2626,#ef4444)}
+.gf.buf{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+.gf.fr{background:linear-gradient(90deg,#16a34a,#22c55e)}
+.gf.sw{background:linear-gradient(90deg,#f59e0b,#eab308)}
+.gf.dk{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
+.gl{font-size:11px;color:var(--muted);min-width:100px;text-align:right}
+.gp{font-size:18px;font-weight:700;min-width:55px;text-align:right}
+.num{font-size:28px;font-weight:700}.nu{font-size:13px;color:var(--muted);font-weight:400}
+.lb{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center}
+.ln{font-size:22px;font-weight:700}.ll{font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px}
+td{padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.03)}
+tr:hover{background:rgba(255,255,255,.02)}.light tr:hover{background:rgba(0,0,0,.03)}
+.mb{display:inline-block;height:10px;border-radius:3px;background:var(--accent);vertical-align:middle;margin-right:4px}
+.fr{font-size:10px;color:var(--muted);text-align:center;padding-top:8px}
+
+/* Token usage */
+.us-sec{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:8px}
+.us-sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px}
+.us-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.us-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+.us-name{font-size:13px;font-weight:700;margin-bottom:8px}
+.us-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+.us-row+.us-row{border-top:1px solid rgba(255,255,255,.04)}.light .us-row+.us-row{border-top:1px solid rgba(0,0,0,.06)}
+.us-lb{font-size:10px;font-weight:600;min-width:24px;color:var(--muted)}
+.us-cb{flex:1;height:7px;background:var(--bg);border-radius:3px;overflow:hidden}
+.us-cf{height:100%;border-radius:3px;transition:width .4s}
+.us-cn{font-size:10px;font-weight:600;min-width:70px;text-align:right}
+.us-cs{font-size:9px;color:var(--muted);min-width:30px;text-align:right}
+.us-val{font-size:22px;font-weight:700}
+.us-sub{font-size:11px;color:var(--muted)}
+.us-ph{background:var(--card);border:1px dashed var(--border);border-radius:8px;padding:14px 16px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;min-height:80px}
+.us-daily{display:flex;gap:3px;align-items:flex-end;height:28px;margin-top:8px}
+.us-daily>div{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.us-bar{width:100%;border-radius:2px;opacity:0.8}
+.us-dl{font-size:8px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">&#x1f5a5; <span>VPS Monitor</span></div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="pills">
+      <div class="pill"><span class="dot"></span> <span id="up">...</span></div>
+      <div class="pill">Load: <b id="l1">-</b></div>
+      <div class="pill">Conn: <b id="cn">-</b></div>
+    </div>
+    <button id="themeBtn" onclick="toggleTheme()" style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;color:var(--text);line-height:1">&#9790;</button>
+  </div>
+</div>
+<div class="grid">
+  <div class="c">
+    <div class="ct">Memory</div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+      <span class="num" id="mu">-</span><span class="nu">GB used</span>
+      <span style="color:var(--muted);font-size:12px">of <span id="mt">-</span> GB</span>
+    </div>
+    <div class="gauge">
+      <div class="gb" id="mstack"><div class="gf app" id="mapp" style="width:0"></div><div class="gf buf" id="mbuf" style="width:0"></div><div class="gf fr" id="mfr" style="width:0"></div></div>
+      <span class="gp" id="mp">0%</span>
+    </div>
+    <div style="margin-top:8px;font-size:11px;display:flex;gap:14px">
+      <span><span style="color:#dc2626">■</span> App: <b id="mappV">-</b>G</span>
+      <span><span style="color:#3b82f6">■</span> Buff/Cache: <b id="mbufV">-</b>G</span>
+      <span><span style="color:#16a34a">■</span> Free: <b id="mfrV">-</b>G</span>
+    </div>
+    <div style="margin-top:4px;font-size:11px;color:var(--muted)">Available (reclaimable): <b id="ma">-</b> GB</div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted)">PRESSURE</div>
+        <div class="gauge" style="flex:1;max-width:160px"><div class="gb"><div class="gf" id="prg" style="width:0"></div></div></div>
+        <span class="gp" id="prs" style="min-width:50px">-</span>
+        <span id="prl" style="font-size:10px;font-weight:600">-</span>
+      </div>
+      <div style="display:flex;gap:16px;font-size:10px">
+        <span>Swap In: <b id="si">-</b> KB/s</span>
+        <span>Swap Out: <b id="so">-</b> KB/s</span>
+        <span>SwapCached: <b id="sc">-</b> MB</span>
+      </div>
+    </div>
+  </div>
+  <div class="c">
+    <div class="ct">CPU Load <span style="font-weight:400;text-transform:none;font-size:10px" id="coreLabel">(2 cores)</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:10px">
+      <div style="text-align:center">
+        <div class="ln" id="lo1">-</div>
+        <div class="ll">1 min</div>
+        <div class="gauge" style="margin-top:6px"><div class="gb"><div class="gf" id="l1b" style="width:0"></div></div></div>
+        <div style="font-size:10px;color:var(--muted)" id="l1p">0%</div>
+      </div>
+      <div style="text-align:center">
+        <div class="ln" id="lo5">-</div>
+        <div class="ll">5 min</div>
+        <div class="gauge" style="margin-top:6px"><div class="gb"><div class="gf" id="l5b" style="width:0"></div></div></div>
+        <div style="font-size:10px;color:var(--muted)" id="l5p">0%</div>
+      </div>
+      <div style="text-align:center">
+        <div class="ln" id="lo15">-</div>
+        <div class="ll">15 min</div>
+        <div class="gauge" style="margin-top:6px"><div class="gb"><div class="gf" id="l15b" style="width:0"></div></div></div>
+        <div style="font-size:10px;color:var(--muted)" id="l15p">0%</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);text-align:center">
+      <span style="color:#22c55e">■</span> &lt;50% <span style="color:#eab308;margin-left:8px">■</span> 50–80% <span style="color:#f97316;margin-left:8px">■</span> 80–100% <span style="color:#ef4444;margin-left:8px">■</span> &gt;100%
+    </div>
+  </div>
+  <div class="c">
+    <div class="ct">Disk /</div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+      <span class="num" id="du">-</span><span class="nu">GB used</span>
+      <span style="color:var(--muted);font-size:12px">of <span id="dt">-</span> GB</span>
+    </div>
+    <div class="gauge"><div class="gb"><div class="gf dk" id="dbg" style="width:0"></div></div><span class="gp" id="dp">0%</span></div>
+  </div>
+  <div class="c">
+    <div class="ct">Swap</div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+      <span class="num" id="su">-</span><span class="nu">GB used</span>
+      <span style="color:var(--muted);font-size:12px">of <span id="st">-</span> GB</span>
+    </div>
+    <div class="gauge"><div class="gb"><div class="gf sw" id="sbg" style="width:0"></div></div><span class="gp" id="sp">0%</span></div>
+  </div>
+</div>
+
+<!-- Token Usage — Full width above Top Processes -->
+<div id="usageContainer">
+<div class="us-sec" style="grid-column:1/-1">
+  <div class="us-sh">&#x1f4ca; Monthly Plans</div>
+  <div class="us-grid" id="monthlyGrid">
+    <div class="us-card" id="monOpenCodeGo" style="border-color:rgba(245,158,11,0.3)"><div class="us-name" style="color:#f59e0b">OpenCode Go</div><div style="font-size:11px;color:var(--muted)">Loading...</div></div>
+    <div class="us-card" id="monOpenAI" style="border-color:rgba(59,130,246,0.3)"><div class="us-name" style="color:var(--accent)">OpenAI</div><div style="font-size:11px;color:var(--muted)">Loading...</div></div>
+  </div>
+</div>
+
+<div class="us-sec" style="grid-column:1/-1">
+  <div class="us-sh">&#x1f4b0; Pay-As-You-Go</div>
+  <div class="us-grid" id="paygGrid">
+    <div class="us-card" id="paygZen" style="border-color:rgba(245,158,11,0.3);display:flex;flex-direction:column"><div class="us-name" style="color:#f59e0b">OpenCode Zen</div><div style="font-size:11px;color:var(--muted)">Loading...</div><div class="us-daily" id="dailyZen" style="margin-top:10px"></div></div>
+    <div class="us-card" id="paygDS" style="border-color:rgba(34,197,94,0.3)"><div class="us-name" style="color:var(--green)">DeepSeek</div><div style="font-size:11px;color:var(--muted)">Loading...</div><div class="us-daily" id="dailyDS" style="margin-top:10px"></div></div>
+  </div>
+</div>
+</div>
+
+<div class="c" style="margin-bottom:14px">
+  <div class="ct">Top Processes</div>
+  <table><thead><tr><th>PID</th><th>Process</th><th>MEM%</th><th>RSS</th></tr></thead><tbody id="tb"></tbody></table>
+</div>
+
+<div class="fr">Updated <span id="ts">now</span></div>
+<script>
+var G=1073741824;
+function F(n){return(n/G).toFixed(1)}
+function P(u,t){return t?Math.round(u/t*100):0}
+function C(p){return p>90?'bad':p>70?'warn':'ok'}
+function E(id){return document.getElementById(id)}
+
+async function poll(){
+  try{
+    var r=await fetch('/api/stats'),s=await r.json(),m=s.memory;
+    var mp=P(m.used_raw||m.used,m.total);
+    var bcp=P(m.buff_cache,m.total);
+    var fp=100-mp-bcp;
+    E('mu').textContent=F(m.used_raw||m.used);
+    E('mt').textContent=F(m.total);
+    E('ma').textContent=F(m.available);
+    E('mp').textContent=Math.round(mp+bcp)+'%';
+    E('mapp').style.width=mp+'%'; E('mbuf').style.width=bcp+'%'; E('mfr').style.width=Math.max(fp,0)+'%';
+    E('mappV').textContent=F(m.used_raw||m.used);
+    E('mbufV').textContent=F(m.buff_cache);
+    E('mfrV').textContent=F(m.free);
+    if(s.swap){var sp=P(s.swap.used,s.swap.total);
+      E('su').textContent=F(s.swap.used);E('st').textContent=F(s.swap.total);E('sp').textContent=sp+'%';
+      E('sbg').style.width=sp+'%';E('sbg').className='gf sw';}
+    if(s.pressure!==undefined){
+      var pr=s.pressure;
+      E('prs').textContent=pr+'%';E('prg').style.width=Math.min(pr,100)+'%';
+      var label,color;if(pr<40){label='LOW';color='fr';}else if(pr<70){label='MODERATE';color='buf';}else if(pr<90){label='HIGH';color='sw';}else{label='CRITICAL';color='app';}
+      E('prl').textContent=label;E('prl').style.color=pr<40?'#22c55e':pr<70?'#60a5fa':pr<90?'#eab308':'#ef4444';
+      E('prg').className='gf '+color;
+    }
+    if(s.swap_activity){
+      E('si').textContent=s.swap_activity.si;E('so').textContent=s.swap_activity.so;
+      E('si').style.color=s.swap_activity.si>0?'#ef4444':'var(--text)';
+      E('so').style.color=s.swap_activity.so>0?'#ef4444':'var(--text)';
+    }
+    if(s.swap){E('sc').textContent=(s.swap.cached/1048576).toFixed(0);}
+    if(s.disk){var dp=P(s.disk.used,s.disk.total);
+      E('du').textContent=F(s.disk.used);E('dt').textContent=F(s.disk.total);E('dp').textContent=dp+'%';
+      E('dbg').style.width=dp+'%';E('dbg').className='gf dk';}
+    if(s.load){
+      var cores=s.load.cores||1;
+      E('coreLabel').textContent='('+cores+' cores)';
+      ['1m','5m','15m'].forEach(function(k,i){
+        var v=s.load[k], pct=Math.min(v/cores*100,150);
+        var id=k==='1m'?'lo1':k==='5m'?'lo5':'lo15';
+        E(id).textContent=v;
+        var bar=E('l'+(i===0?'1':i===1?'5':'15')+'b');
+        bar.style.width=Math.min(pct,100)+'%';
+        bar.className='gf '+(pct>100?'app':pct>80?'app':pct>50?'buf':'fr');
+        E('l'+(i===0?'1':i===1?'5':'15')+'p').textContent=Math.round(pct)+'%';
+      });
+    }
+    E('tb').innerHTML=(s.top_procs||[]).map(function(p){
+      return '<tr><td>'+p.pid+'</td><td><span class="mb" style="width:'+Math.min(p.mem*2,30)+'px"></span>'+p.cmd+'</td><td>'+p.mem.toFixed(1)+'%</td><td>'+(p.rss/1024).toFixed(0)+'M</td></tr>';
+    }).join('');
+    E('up').textContent=s.uptime||'?';E('cn').textContent=s.connections||0;
+    E('ts').textContent=new Date().toLocaleTimeString();
+  }catch(e){}
+}
+
+// ── Token Usage ──────────────────────────────────────────────────────
+function fmt(n){return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':n+''}
+function fmt$(n){
+  if(n>=100) return '$'+n.toFixed(0);
+  if(n>=1) return '$'+n.toFixed(2);
+  if(n>=0.01) return '$'+n.toFixed(3);
+  return '$'+n.toFixed(4);
+}
+
+function capPct(c,l){return l>0?Math.min(c/l*100,100):0}
+function capClr(p){return p>=90?'var(--red)':p>=70?'var(--yellow)':'var(--accent)'}
+
+async function pollUsage(){
+  try{
+    var r=await fetch('/api/usage'),d=await r.json();
+    var bp=d.by_provider||{}, pw=d.by_provider_windows||{};
+
+    // ── Monthly Plans ───────────────────────────────────────────────
+
+    // OpenCode Go — workspace percentages (from user's workspace, manual update)
+    var goEl=E('monOpenCodeGo');
+    var goPv=bp['opencode-go'];
+    // Workspace-reported usage: user checks at https://opencode.ai/workspace/wrk_01KP6CSEEWZ3EAZ48BHFAR7TCM/go
+    // Current values: 5hr=0%, 5day=10%, 30day=7%
+    var goUsage=[{l:'5hr',pct:0,label:'rolling'},{l:'5day',pct:10,label:'rolling'},{l:'30day',pct:7,label:'rolling'}];
+    var html='<div class="us-name" style="color:#f59e0b">OpenCode Go</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">workspace data</div>';
+    goUsage.forEach(function(u){
+      var pct=u.pct;
+      html+='<div class="us-row"><div class="us-lb">'+u.l+'</div>'
+         +'<div class="us-cb"><div class="us-cf" style="width:'+pct+'%;background:#f59e0b"></div></div>'
+         +'<div class="us-cn" style="color:'+capClr(pct)+'">'+Math.round(pct)+'%</div>'
+         +'<div class="us-cs">used</div></div>';
+    });
+    html+='<div style="font-size:9px;color:var(--muted);margin-top:6px;text-align:center">$10/mo flat sub</div>';
+    goEl.innerHTML=html;
+
+    // OpenAI Plus — ChatGPT Plus message quotas (live from API)
+    var oaiEl=E('monOpenAI');
+    var cp=d.chatgpt_plus||{};
+    if(cp.rate_limit && !cp.error){
+      var pw=cp.rate_limit.primary_window||{};
+      var sw=cp.rate_limit.secondary_window||{};
+      var html='<div class="us-name" style="color:var(--accent)">OpenAI Plus</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+cp.plan_type+' &middot; GPT-5.3 / GPT-5.5 Thinking</div>';
+      // Primary window (5h — GPT-5.3)
+      var pct=pw.used_percent||0;
+      html+='<div class="us-row"><div class="us-lb">5h</div>'
+         +'<div class="us-cb"><div class="us-cf" style="width:'+pct+'%;background:var(--accent)"></div></div>'
+         +'<div class="us-cn" style="color:'+capClr(pct)+'">'+Math.round(pct)+'%</div>'
+         +'<div class="us-cs">GPT-5.3</div></div>';
+      // Secondary window (7d — GPT-5.5 Thinking)
+      var spct=sw.used_percent||0;
+      html+='<div class="us-row"><div class="us-lb">7d</div>'
+         +'<div class="us-cb"><div class="us-cf" style="width:'+spct+'%;background:var(--accent)"></div></div>'
+         +'<div class="us-cn" style="color:'+capClr(spct)+'">'+Math.round(spct)+'%</div>'
+         +'<div class="us-cs">GPT-5.5 Think</div></div>';
+      oaiEl.innerHTML=html;
+    }else{
+      oaiEl.innerHTML='<div class="us-name" style="color:var(--accent)">OpenAI Plus</div><div style="font-size:11px;color:var(--muted)">'+((cp.error||'Connecting...'))+'</div>';
+    }
+
+    // ── PAYG (side by side, each with 5 daily bars) ─────────────────
+
+    // OpenCode Zen (first, next to Go above)
+    var zenEl=E('paygZen');
+    var os=d.opencode_stats||{};
+    var zenHtml='<div class="us-name" style="color:#f59e0b">OpenCode Zen</div>';
+    if(os.total_cost_30d!==null && os.total_cost_30d!==undefined){
+      zenHtml+='<div class="us-val" style="color:#f59e0b">'+fmt$(os.total_cost_30d)+'</div>'
+        +'<div class="us-sub">30d (local CLI only)</div>';
+    }else{
+      zenHtml+='<div style="font-size:11px;color:var(--muted);margin:4px 0">'+(os.error||'local stats N/A')+'</div>';
+    }
+    zenHtml+='<div style="font-size:9px;color:var(--muted);text-align:center;margin-top:4px">account total needs workspace API</div>';
+    zenEl.innerHTML=zenHtml+'<div class="us-daily" id="dailyZen" style="margin-top:8px"></div>';
+
+    // DeepSeek (second)
+    var ds=bp['deepseek'];
+    var dsEl=E('paygDS');
+    if(ds){
+      dsEl.innerHTML='<div class="us-name" style="color:var(--green)">DeepSeek</div>'
+        +'<div class="us-val" style="color:var(--green)">'+fmt$(ds.cost||0)+'</div>'
+        +'<div class="us-sub">'+fmt(ds.inp||0)+' in &middot; '+fmt(ds.out||0)+' out &middot; '+ds.calls+' calls</div>'
+        +'<div class="us-daily" id="dailyDS" style="margin-top:8px"></div>';
+    }else{
+      dsEl.innerHTML='<div class="us-name" style="color:var(--green)">DeepSeek</div><div style="font-size:11px;color:var(--muted)">No data yet</div><div class="us-daily" id="dailyDS" style="margin-top:8px"></div>';
+    }
+
+    // ── Render 5 daily bars for each PAYG provider ───────────────────
+    function renderDailyBars(containerId, dailyData, barColor){
+      var el=E(containerId);
+      var days=[];
+      var now=new Date();
+      for(var i=4;i>=0;i--){
+        var d=new Date(now); d.setDate(d.getDate()-i);
+        var ds=d.toISOString().slice(0,10);
+        var match=dailyData?dailyData.find(function(x){return x.day===ds}):null;
+        days.push({day:ds.slice(5), cost:match?match.cost:0, total:match?match.total:0});
+      }
+      var maxCost=0;
+      days.forEach(function(d){if(d.cost>maxCost) maxCost=d.cost;});
+      var html='';
+      days.forEach(function(d){
+        var h=maxCost?Math.max(Math.round(d.cost/maxCost*22),1):0;
+        var color=d.cost>0?barColor:'var(--border)';
+        html+='<div><div class="us-bar" style="height:'+h+'px;background:'+color+';opacity:'+(d.cost>0?'0.9':'0.3')+'"></div>'
+           +'<div class="us-dl">'+d.day+'</div></div>';
+      });
+      el.innerHTML=html;
+    }
+
+    var dp=d.daily_by_provider||{};
+    renderDailyBars('dailyDS', dp['deepseek'], 'var(--green)');
+    renderDailyBars('dailyZen', null, '#f59e0b');
+
+  }catch(e){
+    // Keep showing "Loading..." on first fetch
+  }
+}
+
+// ── Theme Toggle ─────────────────────────────────────────────────
+function toggleTheme(){
+  document.body.classList.toggle('light');
+  var isLight=document.body.classList.contains('light');
+  localStorage.setItem('vps-theme',isLight?'light':'dark');
+  document.getElementById('themeBtn').innerHTML=isLight?'&#9790;':'&#9790;';
+}
+// Apply saved theme on load
+(function(){
+  var t=localStorage.getItem('vps-theme');
+  if(t==='light'){document.body.classList.add('light');}
+})();
+
+poll();pollUsage();setInterval(poll,3000);setInterval(pollUsage,15000);
+</script>
+</body>
+</html>

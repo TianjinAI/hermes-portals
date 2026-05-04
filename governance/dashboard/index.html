@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Governance Dashboard — governed-dev</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <header class="topbar">
+    <div class="logo">⚖️ Governed-Dev Pipeline</div>
+    <div class="status-bar">
+      <span class="status-dot" id="connectionDot"></span>
+      <span id="connectionLabel">connecting</span>
+      <span class="sep">|</span>
+      <span id="activeStage">idle</span>
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <!-- LEFT: 8-stage pipeline -->
+    <aside class="pipeline-panel">
+      <div class="panel-title">PIPELINE</div>
+      <div class="stages" id="stagesContainer"></div>
+    </aside>
+
+    <!-- CENTER: context panels -->
+    <main class="context-panel">
+      <div class="panel-group" id="contextGroup">
+        <!-- Intent Packet -->
+        <section class="card" id="intentCard">
+          <div class="card-header">🎯 Intent Packet</div>
+          <div class="card-body" id="intentBody">
+            <div class="placeholder">No active pipeline run.</div>
+          </div>
+        </section>
+        <!-- Dispatch Plan -->
+        <section class="card" id="planCard">
+          <div class="card-header">📋 Dispatch Plan</div>
+          <div class="card-body" id="planBody">
+            <div class="placeholder">Waiting for Stage 3 (Thinking).</div>
+          </div>
+        </section>
+        <!-- Active Task -->
+        <section class="card" id="taskCard">
+          <div class="card-header">🔧 Active Task</div>
+          <div class="card-body" id="taskBody">
+            <div class="placeholder">No task active.</div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- RIGHT: activity log -->
+    <aside class="log-panel">
+      <div class="panel-title">ACTIVITY LOG</div>
+      <div class="log-feed" id="logFeed">
+        <div class="log-entry muted">Waiting for pipeline to start...</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
