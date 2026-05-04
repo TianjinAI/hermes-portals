@@ -147,6 +147,28 @@ tr:hover{background:rgba(255,255,255,.02)}.light tr:hover{background:rgba(0,0,0,
 
 <!-- Token Usage — Full width above Top Processes -->
 <div id="usageContainer">
+<!-- Tokscale Cross-Agent Stats -->
+<div class="us-sec" style="grid-column:1/-1">
+  <div class="us-sh">&#x1f310; Cross-Agent Token Usage (Tokscale)</div>
+  <div style="display:flex;align-items:center;gap:20px;margin-bottom:12px">
+    <div style="flex:1">
+      <div class="us-val" id="tsTotalCost" style="color:var(--accent)">-</div>
+      <div class="us-sub">Total cost (all agents)</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted)" id="tsLastUpdate">Last update: -</div>
+  </div>
+  <div class="us-grid" id="tokscaleGrid">
+    <div class="us-card" id="tsClients" style="border-color:rgba(59,130,246,0.3)">
+      <div class="us-name" style="color:var(--accent)">Active Clients</div>
+      <div style="font-size:11px;color:var(--muted)">Loading...</div>
+    </div>
+    <div class="us-card" id="tsMonthly" style="border-color:rgba(34,197,94,0.3)">
+      <div class="us-name" style="color:var(--green)">Monthly Trend</div>
+      <div style="font-size:11px;color:var(--muted)">Loading...</div>
+    </div>
+  </div>
+</div>
+
 <div class="us-sec" style="grid-column:1/-1">
   <div class="us-sh">&#x1f4ca; Monthly Plans</div>
   <div class="us-grid" id="monthlyGrid">
@@ -242,6 +264,60 @@ function fmt$(n){
 
 function capPct(c,l){return l>0?Math.min(c/l*100,100):0}
 function capClr(p){return p>=90?'var(--red)':p>=70?'var(--yellow)':'var(--accent)'}
+
+// ── Tokscale Cross-Agent Stats ───────────────────────────────────────
+async function pollTokscale(){
+  try{
+    var r=await fetch('/api/tokscale'),d=await r.json();
+    
+    // Total cost
+    E('tsTotalCost').textContent=fmt$(d.total_cost||0);
+    
+    // Last update
+    if(d.last_update){
+      var lu=new Date(d.last_update);
+      E('tsLastUpdate').textContent='Updated: '+lu.toLocaleString();
+    }
+    
+    // Active clients (top 5 by messageCount)
+    var clients=(d.clients||[]).filter(function(c){return c.messageCount>0;})
+      .sort(function(a,b){return b.messageCount-a.messageCount;}).slice(0,5);
+    var cliHtml='<div class="us-name" style="color:var(--accent)">Active Clients</div>';
+    if(clients.length){
+      cliHtml+='<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+clients.length+' agents with data</div>';
+      clients.forEach(function(c){
+        var pct=Math.min(c.messageCount/21000*100,100);
+        cliHtml+='<div class="us-row"><div class="us-lb" style="min-width:60px">'+c.label+'</div>'
+           +'<div class="us-cb"><div class="us-cf" style="width:'+pct+'%;background:var(--accent)"></div></div>'
+           +'<div class="us-cn">'+c.messageCount+'</div>'
+           +'<div class="us-cs">msgs</div></div>';
+      });
+    }else{
+      cliHtml+='<div style="font-size:11px;color:var(--muted)">'+(d.error||'No data')+'</div>';
+    }
+    E('tsClients').innerHTML=cliHtml;
+    
+    // Monthly trend
+    var monthly=d.monthly||[];
+    var monHtml='<div class="us-name" style="color:var(--green)">Monthly Trend</div>';
+    if(monthly.length){
+      monthly.forEach(function(m){
+        var inp=m.input||0, out=m.output||0;
+        monHtml+='<div class="us-row"><div class="us-lb">'+m.month.slice(5)+'</div>'
+           +'<div class="us-cb"><div class="us-cf" style="width:'+Math.min(m.cost/200*100,100)+'%;background:var(--green)"></div></div>'
+           +'<div class="us-cn" style="color:var(--green)">'+fmt$(m.cost)+'</div>'
+           +'<div class="us-cs">'+fmt(inp)+' in</div></div>';
+      });
+    }else{
+      monHtml+='<div style="font-size:11px;color:var(--muted)">No monthly data</div>';
+    }
+    E('tsMonthly').innerHTML=monHtml;
+    
+  }catch(e){
+    E('tsClients').innerHTML='<div class="us-name" style="color:var(--accent)">Active Clients</div><div style="font-size:11px;color:var(--muted)">Error loading</div>';
+    E('tsMonthly').innerHTML='<div class="us-name" style="color:var(--green)">Monthly Trend</div><div style="font-size:11px;color:var(--muted)">Error loading</div>';
+  }
+}
 
 async function pollUsage(){
   try{
@@ -365,7 +441,7 @@ function toggleTheme(){
   if(t==='light'){document.body.classList.add('light');}
 })();
 
-poll();pollUsage();setInterval(poll,3000);setInterval(pollUsage,15000);
+poll();pollTokscale();pollUsage();setInterval(poll,3000);setInterval(pollTokscale,60000);setInterval(pollUsage,15000);
 </script>
 </body>
 </html>
