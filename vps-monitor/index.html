@@ -313,6 +313,41 @@ async function pollTokscale(){
     }
     E('tsMonthly').innerHTML=monHtml;
     
+    // ── Update PAYG section with provider data ───────────────────────
+    var bp=d.by_provider||{};
+    
+    // DeepSeek card
+    var ds=bp['DeepSeek'];
+    var dsEl=E('paygDS');
+    if(ds){
+      var modelsHtml='';
+      ds.models.slice(0,3).forEach(function(m){
+        modelsHtml+='<div style="font-size:9px;color:var(--muted)">'+m.model+': '+fmt$(m.cost)+' ('+m.messageCount+' msgs)</div>';
+      });
+      dsEl.innerHTML='<div class="us-name" style="color:var(--green)">DeepSeek</div>'
+        +'<div class="us-val" style="color:var(--green)">'+fmt$(ds.cost)+'</div>'
+        +'<div class="us-sub">'+fmt(ds.input)+' in &middot; '+fmt(ds.output)+' out</div>'
+        +'<div style="margin-top:6px">'+modelsHtml+'</div>';
+    }else{
+      dsEl.innerHTML='<div class="us-name" style="color:var(--green)">DeepSeek</div><div style="font-size:11px;color:var(--muted)">No data</div>';
+    }
+    
+    // OpenAI card (rename from Zen)
+    var oai=bp['OpenAI'];
+    var zenEl=E('paygZen');
+    if(oai){
+      var modelsHtml='';
+      oai.models.slice(0,3).forEach(function(m){
+        modelsHtml+='<div style="font-size:9px;color:var(--muted)">'+m.model+': '+fmt$(m.cost)+' ('+m.messageCount+' msgs)</div>';
+      });
+      zenEl.innerHTML='<div class="us-name" style="color:#f59e0b">OpenAI (GPT)</div>'
+        +'<div class="us-val" style="color:#f59e0b">'+fmt$(oai.cost)+'</div>'
+        +'<div class="us-sub">'+fmt(oai.input)+' in &middot; '+fmt(oai.output)+' out</div>'
+        +'<div style="margin-top:6px">'+modelsHtml+'</div>';
+    }else{
+      zenEl.innerHTML='<div class="us-name" style="color:#f59e0b">OpenAI (GPT)</div><div style="font-size:11px;color:var(--muted)">No data</div>';
+    }
+    
   }catch(e){
     E('tsClients').innerHTML='<div class="us-name" style="color:var(--accent)">Active Clients</div><div style="font-size:11px;color:var(--muted)">Error loading</div>';
     E('tsMonthly').innerHTML='<div class="us-name" style="color:var(--green)">Monthly Trend</div><div style="font-size:11px;color:var(--muted)">Error loading</div>';
