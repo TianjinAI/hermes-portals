@@ -304,50 +304,16 @@ def get_opencode_stats():
 
 # ── Tokscale Cross-Agent Token Tracking ───────────────────────────────
 
-TOKSCALE_BIN = Path.home() / ".npm-global" / "bin" / "tokscale"
+TOKSCALE_CACHE = DIR / "tokscale_cache.json"
 
 def get_tokscale_data():
-    """Query tokscale for cross-agent token usage (OpenCode, Claude, Codex, etc.)."""
-    result = {"clients": [], "monthly": [], "hourly_today": [], "total_cost": 0}
-    if not TOKSCALE_BIN.exists():
-        result["error"] = "tokscale not installed"
-        return result
+    """Read cached tokscale data (refreshed by cron every 2 hours)."""
+    if not TOKSCALE_CACHE.exists():
+        return {"clients": [], "monthly": [], "total_cost": 0, "error": "cache not found"}
     try:
-        # Clients scan
-        r = subprocess.run(
-            [str(TOKSCALE_BIN), "clients", "--json"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            universal_newlines=True, timeout=30,
-        )
-        if r.returncode == 0:
-            data = json.loads(r.stdout)
-            result["clients"] = data.get("clients", [])
-        
-        # Monthly usage
-        r = subprocess.run(
-            [str(TOKSCALE_BIN), "monthly", "--json"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            universal_newlines=True, timeout=30,
-        )
-        if r.returncode == 0:
-            data = json.loads(r.stdout)
-            result["monthly"] = data.get("entries", [])
-            result["total_cost"] = data.get("totalCost", 0)
-        
-        # Hourly today
-        r = subprocess.run(
-            [str(TOKSCALE_BIN), "hourly", "--json", "--today"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            universal_newlines=True, timeout=30,
-        )
-        if r.returncode == 0:
-            data = json.loads(r.stdout)
-            result["hourly_today"] = data.get("entries", [])
-        
-        result["processing_time_ms"] = 30
+        return json.loads(TOKSCALE_CACHE.read_text())
     except Exception as e:
-        result["error"] = str(e)
-    return result
+        return {"clients": [], "monthly": [], "total_cost": 0, "error": str(e)}
 
 
 # ── HTTP Handler ──────────────────────────────────────────────────────
