@@ -601,30 +601,17 @@ def build_intelligence():
         for r in wb_reports:
             report = read_workbuddy_report(r["path"])
             if report and report.get("html"):
-                title = report.get("title", r["name"]).strip()
-                # Only show actual Deep Dive Analysis reports
-                if "deep dive" not in title.lower():
-                    continue
-                report_date = report.get("report_date", "")
-                summary = report.get("summary", "")
-                # Avoid summary that's just the title repeated
-                if summary.lower().startswith(title.lower()[:20]):
-                    summary = ""
-                meta_parts = []
-                if report_date:
-                    meta_parts.append(report_date)
-                meta_parts.append(f"{r['size']/1024:.0f} KB")
-                meta_parts.append("WorkBuddy")
-                meta_str = " · ".join(meta_parts)
+                p_match = re.search(r"<p>(.*?)</p>", report["html"])
+                summary_line = p_match.group(1)[:300] if p_match else ""
                 wb_cards.append('\n'.join([
                     '<div class="topic-card" style="border-color:rgba(5,150,105,0.3)">',
                     '  <div class="topic-top">',
                     '    <div class="topic-main">',
-                    f'      <div class="topic-name" style="font-size:15px"><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#059669,#34d399);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12px">W</span>{esc(title)}</span></div>',
-                    f'      <div class="topic-meta">{esc(meta_str)}</div>',
+                    f'      <div class="topic-name" style="font-size:15px"><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#059669,#34d399);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:12px">W</span>{r["name"]}</span></div>',
+                    f'      <div class="topic-meta">{r.get("date","") or "No date"} | {r["size"]/1024:.0f} KB | WorkBuddy/翠鸟 Deep-Dive</div>',
                     '    </div>',
                     '  </div>',
-                    f'  <div style="margin-top:10px;color:var(--text-secondary);font-size:13px;line-height:1.6">{esc(summary) if summary else "…"}</div>',
+                    f'  <div style="margin-top:10px;color:var(--text-secondary);font-size:13px;line-height:1.6">{summary_line}&#8230;</div>',
                     '  <details style="margin-top:12px">',
                     '    <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--accent)">View full analysis →</summary>',
                     f'    <div class="analysis-report-body" style="margin-top:12px;padding:14px;background:var(--surface-alt);border-radius:var(--radius);border:1px solid var(--border-light);max-height:600px;overflow-y:auto">{report["html"]}</div>',
@@ -635,7 +622,7 @@ def build_intelligence():
             '<div class="section-header" style="margin-top:18px">',
             '  <div class="section-icon" style="background:rgba(5,150,105,0.12);color:#059669">\U0001f52c</div>',
             '  <div class="section-title" style="color:#059669">WorkBuddy Deep-Dive Analysis</div>',
-            f'  <div class="section-count">{len(wb_cards)} report{"s" if len(wb_cards)>1 else ""}</div>',
+            f'  <div class="section-count">{len(wb_reports)} report{"s" if len(wb_reports)>1 else ""}</div>',
             '</div>',
             f'<div class="topic-stack">{"".join(wb_cards)}</div>',
         ])
@@ -1041,7 +1028,7 @@ async function renderBrief() {
 }
 
 async function renderFull() {
-  document.getElementById('content').innerHTML = '<div class="loading">Loading full digest…</div>';
+  document.getElementById('content').innerHTML = '<div class="loading">Loading full digest...</div>';
   let data;
   try {
     data = await getDateData(currentDate);
@@ -1049,151 +1036,8 @@ async function renderFull() {
     document.getElementById('content').innerHTML = '<div class="empty">Digest not available for this date.</div>';
     return;
   }
-
-  // Collect newsletters from both index (with previews) and meta (fallback)
-  const nlMap = new Map();
-  for (const nl of (data.index?.newsletters || [])) {
-    const urlMatches = (nl.summary_preview || '').match(/https?:\/\/(?:www\.)?bloomberg\.com\/news\/newsletters\/[^\s<>)]+/g);
-    let preview = (nl.summary_preview || '').replace(/https?:\/\/[^\s<>)]+/g, '').replace(/\s+/g, ' ').trim();
-    if (preview.length > 200) preview = preview.substring(0, 200) + '…';
-    nlMap.set(nl.id, {
-      ...nl,
-      originalUrl: urlMatches ? urlMatches[0] : (nl.urls?.[0] || ''),
-      preview: preview,
-    });
-  }
-  // Also add from meta if not already in index
-  for (const nl of (data.meta?.newsletters || [])) {
-    if (!nlMap.has(nl.id)) {
-      nlMap.set(nl.id, {
-        ...nl,
-        summary_preview: '',
-        originalUrl: nl.urls?.[0] || '',
-        preview: '',
-        url_count: (nl.urls || []).length,
-      });
-    }
-  }
-  const enrichedNewsletters = [...nlMap.values()];
-
-  const brief = data.brief_parsed || { headlines: [], market_data: [], watch_items: [], quick_scan: [] };
-  const headlines = brief.headlines || [];
-  const watch = brief.watch_items || [];
-  const quick = brief.quick_scan || [];
-
-  // Match each headline to the best newsletter (for clickable original link)
-  function matchHeadlineToNewsletter(hl) {
-    const hlText = (hl.title + ' ' + hl.context).toLowerCase();
-    const hlWords = hlText.split(/\s+/).filter(w => w.length > 4).slice(0, 5);
-    let bestNl = null, bestScore = 0;
-    for (const nl of enrichedNewsletters) {
-      const haystack = ((nl.summary_preview || '') + ' ' + (nl.subject || '') + ' ' + (nl.from_name || '')).toLowerCase();
-      const score = hlWords.filter(w => haystack.includes(w)).length;
-      if (score > bestScore) { bestScore = score; bestNl = nl; }
-    }
-    return (bestScore >= 2 && bestNl) ? bestNl.originalUrl : null;
-  }
-
-  const topStories = headlines.slice(0, 3);
-  const remainingHeadlines = headlines.slice(3);
-
-  // ---- Newsletter cards ----
-  const nlHtml = enrichedNewsletters.length ? enrichedNewsletters.map(nl => {
-    const color = getColor(nl.newsletter_type);
-    const href = nl.originalUrl || '#';
-    return `<div class="card" style="border-left:4px solid ${color};padding:16px 18px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
-        <span style="background:${color};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:.5px">${esc(nl.newsletter_type || 'Newsletter')}</span>
-        <span class="muted" style="font-size:11px">${esc(nl.date_local || '')}</span>
-      </div>
-      <div style="font-size:15px;font-weight:700;margin-bottom:6px;line-height:1.3">
-        <a href="${esc(href)}" target="_blank" style="color:var(--text);text-decoration:none" onmouseover="this.style.color='${color}'" onmouseout="this.style.color=''">${esc(nl.subject)} ↗</a>
-      </div>
-      ${nl.preview ? `<div class="story-context">${esc(nl.preview)}</div>` : ''}
-      <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">
-        ${nl.url_count || 0} links
-        · <a href="${esc(href)}" target="_blank" style="color:${color};font-weight:600;text-decoration:none">Open original →</a>
-      </div>
-    </div>`;
-  }).join('') : '';
-
-  // ---- Top Stories ----
-  const topStoryHtml = topStories.length ? topStories.map((item, i) => {
-    const url = matchHeadlineToNewsletter(item);
-    const titleHtml = url
-      ? `<a href="${esc(url)}" target="_blank" style="color:var(--text);text-decoration:none;display:block">${esc(item.title)} ↗</a>`
-      : esc(item.title);
-    return `<div class="story-card">
-      <div class="story-rank">${item.rank}</div>
-      <div>
-        <div class="story-title">${titleHtml}</div>
-        <div class="story-context">${esc(item.context)}</div>
-        <div class="story-tags">${formatTopicTags(item.topic_tags && item.topic_tags.length ? item.topic_tags : [item.category].filter(Boolean))}</div>
-      </div>
-    </div>`;
-  }).join('') : '';
-
-  // ---- Remaining headlines (collapsible) ----
-  const remainingHtml = remainingHeadlines.length ? remainingHeadlines.map(item => {
-    const url = matchHeadlineToNewsletter(item);
-    const titleHtml = url
-      ? `<a href="${esc(url)}" target="_blank" style="color:var(--text);text-decoration:none">${esc(item.title)} ↗</a>`
-      : esc(item.title);
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--border-light);display:flex;gap:10px;align-items:start">
-      <span class="muted" style="font-family:var(--mono);font-weight:700;font-size:12px;min-width:24px">${item.rank}</span>
-      <div style="flex:1">
-        <div style="font-weight:600;font-size:13px">${titleHtml}</div>
-        <div class="story-context" style="font-size:12px">${esc(item.context)}</div>
-      </div>
-    </div>`;
-  }).join('') : '';
-
-  // ---- Watch items (collapsible) ----
-  const watchHtml = watch.length ? watch.map(item => `
-    <div class="watch-item">
-      <div class="watch-rank">${item.rank}</div>
-      <div>
-        <div class="watch-title">${esc(item.title)}</div>
-        <div class="watch-desc">${esc(item.description)}</div>
-      </div>
-    </div>`).join('') : '';
-
-  // ---- Quick Scan ----
-  const quickHtml = quick.length ? `
-    <div class="card"><table class="quick-table">
-      <thead><tr><th>Time</th><th>Subject</th><th>Takeaway</th></tr></thead>
-      <tbody>${quick.map(row => `<tr><td>${esc(row.time)}</td><td>${esc(row.subject)}</td><td>${esc(row.takeaway)}</td></tr>`).join('')}</tbody>
-    </table></div>` : '';
-
-  // ---- Raw full_html (collapsed) ----
-  const rawHtml = data.full_html ? `
-    <details style="margin-top:18px">
-      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--accent);padding:8px 0">Raw Digest HTML (${(data.full_html.length / 1024).toFixed(0)} KB) →</summary>
-      <div class="full-shell" style="margin-top:12px"><div class="full-frame">${data.full_html}</div></div>
-    </details>` : '';
-
-  // ---- Assemble page ----
-  const sections = [];
-  if (nlHtml) {
-    sections.push(`<div class="section-header"><div class="section-icon" style="background:var(--blue-bg);color:var(--blue)">📬</div><div class="section-title">Newsletter Digest</div><div class="section-count">${enrichedNewsletters.length} newsletters</div></div>
-      <div style="display:grid;gap:12px">${nlHtml}</div>`);
-  }
-  if (topStoryHtml) {
-    sections.push(`<div class="section-header" style="margin-top:22px"><div class="section-icon" style="background:var(--red-bg);color:var(--red)">🔥</div><div class="section-title">Top Stories</div><div class="section-count">${topStories.length} deep dives</div></div>
-      <div class="story-list">${topStoryHtml}</div>`);
-  }
-  if (remainingHtml) {
-    sections.push(`<div class="section-header" style="margin-top:18px"><div class="section-icon" style="background:var(--purple-bg);color:var(--purple)">📋</div><div class="section-title">Remaining Headlines</div><div class="section-count">${remainingHeadlines.length} items</div></div>
-      <details><summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--accent);padding:8px 0">Show ${remainingHeadlines.length} more headlines →</summary><div style="margin-top:8px">${remainingHtml}</div></details>`);
-  }
-  if (watchHtml) {
-    sections.push(`<div class="section-header" style="margin-top:18px"><div class="section-icon" style="background:var(--amber-bg);color:var(--amber)">💡</div><div class="section-title">Watch Items</div><div class="section-count">${watch.length} items</div></div>
-      <details><summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--accent);padding:8px 0">Show ${watch.length} watch items →</summary><div class="card" style="margin-top:8px"><div class="watch-grid">${watchHtml}</div></div></details>`);
-  }
-  if (quickHtml) sections.push(quickHtml);
-  if (rawHtml) sections.push(rawHtml);
-
-  document.getElementById('content').innerHTML = sections.join('') || '<div class="empty">No digest data available for this date.</div>';
+  const html = data.full_html || '<p class="muted">Full HTML digest not available for this date.</p>';
+  document.getElementById('content').innerHTML = `<div class="full-shell"><div class="full-frame">${html}</div></div>`;
 }
 
 async function renderIntel(forceRefresh = false) {
@@ -1370,7 +1214,7 @@ def build_workbuddy_index():
     if not WORKBUDDY_DIR.exists():
         return {"reports": []}
     reports = []
-    for path in sorted(WORKBUDDY_DIR.glob("*.md"), reverse=True):
+    for path in sorted(WORKBUDDY_DIR.glob("*_result.md"), reverse=True):
         stem = path.stem
         # Extract readable name from filename
         name = stem.replace("_result", "").replace("hermes_", "")
@@ -1403,75 +1247,7 @@ def read_workbuddy_report(report_path):
         return None
     # Convert markdown to safe HTML (basic conversion)
     html = markdown_to_html(content)
-
-    # Extract title from first # heading
-    title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
-    title = title_match.group(1).strip() if title_match else path.stem
-
-    # Extract date from **Executed At:** line
-    report_date = ""
-    date_match = re.search(r"\*\*Executed At:\*\*\s*(.+?)(?:\n|$)", content)
-    if date_match:
-        date_str = date_match.group(1).strip()
-        date_parse = re.search(r"(\d{4})-(\d{2})-(\d{2})", date_str)
-        if date_parse:
-            report_date = f"{date_parse.group(1)}-{date_parse.group(2)}-{date_parse.group(3)}"
-
-    # Extract summary: first substantial paragraph after ## Summary or ## Executive Summary
-    summary = ""
-    for summary_heading in (r"^## Summary\s*$", r"^## Executive Summary\s*$"):
-        summary_section = re.search(rf"{summary_heading}\n+(.+?)(?=\n##|\Z)", content, re.DOTALL | re.MULTILINE)
-        if summary_section:
-            raw = summary_section.group(1).strip()
-            # Strip markdown formatting and take first meaningful block
-            raw = re.sub(r"\*\*|`", "", raw)
-            raw = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", raw)
-            raw = re.sub(r"\s+", " ", raw).strip()
-            # Take first sentence or first 300 chars
-            if raw:
-                summary = raw[:300]
-                # Try to end at a sentence boundary
-                sentence_end = re.search(r".*?[.?!](?:\s|$)", summary)
-                if sentence_end:
-                    summary = sentence_end.group(0).strip()
-                break
-    if not summary:
-        # Fallback: first non-metadata paragraph of reasonable length
-        for line in content.split("\n"):
-            s = line.strip()
-            if not s:
-                continue
-            # Skip task metadata lines: **Task ID:** or **Task ID**: style
-            if s.startswith("**") and s.count("**") >= 2 and ":" in s and len(s) < 80:
-                continue
-            # Skip generation boilerplate: *Generated for*, *Created*, etc.
-            if re.match(r"^\*?(?:Generated|Created|Updated)\s+(?:for|on|at|by)", s, re.IGNORECASE):
-                continue
-            # Skip headings
-            if s.startswith("#"):
-                continue
-            # Skip separators and table dividers
-            if s in ("---", "___", "***") or re.match(r"^[|:\- ]+$", s):
-                continue
-            # Found a content line
-            text = re.sub(r"\*\*|`", "", s)
-            text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-            text = re.sub(r"\s+", " ", text).strip()
-            if text and len(text) > 15:
-                if len(text) > 200:
-                    text = text[:200] + "…"
-                summary = text
-                break
-
-    return {
-        "content": content,
-        "html": html,
-        "path": report_path,
-        "size": path.stat().st_size,
-        "title": title,
-        "report_date": report_date,
-        "summary": summary,
-    }
+    return {"content": content, "html": html, "path": report_path, "size": path.stat().st_size}
 
 
 def markdown_to_html(text):
