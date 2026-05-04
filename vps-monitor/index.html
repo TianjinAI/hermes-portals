@@ -404,59 +404,7 @@ async function pollUsage(){
       oaiEl.innerHTML='<div class="us-name" style="color:var(--accent)">OpenAI Plus</div><div style="font-size:11px;color:var(--muted)">'+((cp.error||'Connecting...'))+'</div>';
     }
 
-    // ── PAYG (side by side, each with 5 daily bars) ─────────────────
-
-    // OpenCode Zen (first, next to Go above)
-    var zenEl=E('paygZen');
-    var os=d.opencode_stats||{};
-    var zenHtml='<div class="us-name" style="color:#f59e0b">OpenCode Zen</div>';
-    if(os.total_cost_30d!==null && os.total_cost_30d!==undefined){
-      zenHtml+='<div class="us-val" style="color:#f59e0b">'+fmt$(os.total_cost_30d)+'</div>'
-        +'<div class="us-sub">30d (local CLI only)</div>';
-    }else{
-      zenHtml+='<div style="font-size:11px;color:var(--muted);margin:4px 0">'+(os.error||'local stats N/A')+'</div>';
-    }
-    zenHtml+='<div style="font-size:9px;color:var(--muted);text-align:center;margin-top:4px">account total needs workspace API</div>';
-    zenEl.innerHTML=zenHtml+'<div class="us-daily" id="dailyZen" style="margin-top:8px"></div>';
-
-    // DeepSeek (second)
-    var ds=bp['deepseek'];
-    var dsEl=E('paygDS');
-    if(ds){
-      dsEl.innerHTML='<div class="us-name" style="color:var(--green)">DeepSeek</div>'
-        +'<div class="us-val" style="color:var(--green)">'+fmt$(ds.cost||0)+'</div>'
-        +'<div class="us-sub">'+fmt(ds.inp||0)+' in &middot; '+fmt(ds.out||0)+' out &middot; '+ds.calls+' calls</div>'
-        +'<div class="us-daily" id="dailyDS" style="margin-top:8px"></div>';
-    }else{
-      dsEl.innerHTML='<div class="us-name" style="color:var(--green)">DeepSeek</div><div style="font-size:11px;color:var(--muted)">No data yet</div><div class="us-daily" id="dailyDS" style="margin-top:8px"></div>';
-    }
-
-    // ── Render 5 daily bars for each PAYG provider ───────────────────
-    function renderDailyBars(containerId, dailyData, barColor){
-      var el=E(containerId);
-      var days=[];
-      var now=new Date();
-      for(var i=4;i>=0;i--){
-        var d=new Date(now); d.setDate(d.getDate()-i);
-        var ds=d.toISOString().slice(0,10);
-        var match=dailyData?dailyData.find(function(x){return x.day===ds}):null;
-        days.push({day:ds.slice(5), cost:match?match.cost:0, total:match?match.total:0});
-      }
-      var maxCost=0;
-      days.forEach(function(d){if(d.cost>maxCost) maxCost=d.cost;});
-      var html='';
-      days.forEach(function(d){
-        var h=maxCost?Math.max(Math.round(d.cost/maxCost*22),1):0;
-        var color=d.cost>0?barColor:'var(--border)';
-        html+='<div><div class="us-bar" style="height:'+h+'px;background:'+color+';opacity:'+(d.cost>0?'0.9':'0.3')+'"></div>'
-           +'<div class="us-dl">'+d.day+'</div></div>';
-      });
-      el.innerHTML=html;
-    }
-
-    var dp=d.daily_by_provider||{};
-    renderDailyBars('dailyDS', dp['deepseek'], 'var(--green)');
-    renderDailyBars('dailyZen', null, '#f59e0b');
+    // PAYG cards are now handled by pollTokscale (provider-level data)
 
   }catch(e){
     // Keep showing "Loading..." on first fetch
