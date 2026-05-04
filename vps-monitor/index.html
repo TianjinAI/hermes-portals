@@ -321,7 +321,7 @@ async function pollTokscale(){
     var dsEl=E('paygDS');
     if(ds){
       var modelsHtml='';
-      ds.models.slice(0,3).forEach(function(m){
+      ds.models.slice(0,10).forEach(function(m){
         modelsHtml+='<div style="font-size:9px;color:var(--muted)">'+m.model+': '+fmt$(m.cost)+' ('+m.messageCount+' msgs)</div>';
       });
       dsEl.innerHTML='<div class="us-name" style="color:var(--green)">DeepSeek</div>'
@@ -337,7 +337,7 @@ async function pollTokscale(){
     var zenEl=E('paygZen');
     if(oai){
       var modelsHtml='';
-      oai.models.slice(0,3).forEach(function(m){
+      oai.models.slice(0,10).forEach(function(m){
         modelsHtml+='<div style="font-size:9px;color:var(--muted)">'+m.model+': '+fmt$(m.cost)+' ('+m.messageCount+' msgs)</div>';
       });
       zenEl.innerHTML='<div class="us-name" style="color:#f59e0b">OpenAI (GPT)</div>'
