@@ -275,7 +275,20 @@ def get_chatgpt_plus_usage():
         return {"error": str(e)}
 
 
-# ── OpenCode Stats ──────────────────────────────────────────────────
+# ── OpenCode Go Usage (manual config) ────────────────────────────────
+
+GO_USAGE_FILE = DIR / "go_usage.json"
+
+def get_go_usage():
+    """Read manual Go usage config (updated by user from workspace page)."""
+    try:
+        if GO_USAGE_FILE.exists():
+            return json.loads(GO_USAGE_FILE.read_text())
+    except:
+        pass
+    return {"5hr": 0, "5day": 0, "30day": 0, "error": "Config not found"}
+
+# ── OpenCode Stats ─────────────────────────────
 
 def get_opencode_stats():
     """Query OpenCode CLI stats for Zen cost."""
@@ -332,6 +345,7 @@ class Handler(BaseHTTPRequestHandler):
                 u = get_usage()
                 u["chatgpt_plus"] = get_chatgpt_plus_usage()
                 u["opencode_stats"] = get_opencode_stats()
+                u["go_usage"] = get_go_usage()
                 body = json.dumps(u).encode()
                 self._respond(200, "application/json", body)
             elif p.path == "/api/tokscale":

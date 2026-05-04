@@ -364,22 +364,20 @@ async function pollUsage(){
 
     // ── Monthly Plans ───────────────────────────────────────────────
 
-    // OpenCode Go — workspace percentages (from user's workspace, manual update)
+    // OpenCode Go — read from config file (user updates manually)
     var goEl=E('monOpenCodeGo');
-    var goPv=bp['opencode-go'];
-    // Workspace-reported usage: user checks at https://opencode.ai/workspace/wrk_01KP6CSEEWZ3EAZ48BHFAR7TCM/go
-    // Current values: 5hr=0%, 5day=10%, 30day=7%
-    var goUsage=[{l:'5hr',pct:0,label:'rolling'},{l:'5day',pct:10,label:'rolling'},{l:'30day',pct:7,label:'rolling'}];
+    var go=d.go_usage||{};
     var html='<div class="us-name" style="color:#f59e0b">OpenCode Go</div>'
       +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">workspace data</div>';
-    goUsage.forEach(function(u){
-      var pct=u.pct;
-      html+='<div class="us-row"><div class="us-lb">'+u.l+'</div>'
+    var windows=[{k:'5hr',l:'5hr',label:'rolling'}, {k:'5day',l:'5day',label:'rolling'}, {k:'30day',l:'30day',label:'rolling'}];
+    windows.forEach(function(w){
+      var pct=go[w.k]||0;
+      html+='<div class="us-row"><div class="us-lb">'+w.l+'</div>'
          +'<div class="us-cb"><div class="us-cf" style="width:'+pct+'%;background:#f59e0b"></div></div>'
-         +'<div class="us-cn" style="color:'+capClr(pct)+'">'+Math.round(pct)+'%</div>'
+         +'<div class="us-cn" style="color:'+capClr(pct)+'">'+pct+'%</div>'
          +'<div class="us-cs">used</div></div>';
     });
-    html+='<div style="font-size:9px;color:var(--muted);margin-top:6px;text-align:center">$10/mo flat sub</div>';
+    html+='<div style="font-size:9px;color:var(--muted);margin-top:6px;text-align:center">$10/mo flat sub &middot; '+go.last_updated+'</div>';
     goEl.innerHTML=html;
 
     // OpenAI Plus — ChatGPT Plus message quotas (live from API)
