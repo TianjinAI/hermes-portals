@@ -331,6 +331,21 @@ def get_tokscale_data():
 
 # ── HTTP Handler ──────────────────────────────────────────────────────
 
+
+# ── Mimo Usage (manual config) ────────────────────────────────────────
+
+MIMO_USAGE_FILE = DIR / "mimo_usage.json"
+
+def get_mimo_usage():
+    """Read manual Mimo usage config."""
+    try:
+        if MIMO_USAGE_FILE.exists():
+            return json.loads(MIMO_USAGE_FILE.read_text())
+    except:
+        pass
+    return {"credits_total": 60000000, "credits_used": 0, "error": "Config not found"}
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         p = urlparse(self.path)
@@ -346,6 +361,7 @@ class Handler(BaseHTTPRequestHandler):
                 u["chatgpt_plus"] = get_chatgpt_plus_usage()
                 u["opencode_stats"] = get_opencode_stats()
                 u["go_usage"] = get_go_usage()
+                u["mimo_usage"] = get_mimo_usage()
                 body = json.dumps(u).encode()
                 self._respond(200, "application/json", body)
             elif p.path == "/api/tokscale":
@@ -380,3 +396,4 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     print(f"VPS Monitor on http://0.0.0.0:{PORT}")
     HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+

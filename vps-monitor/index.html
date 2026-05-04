@@ -172,6 +172,7 @@ tr:hover{background:rgba(255,255,255,.02)}.light tr:hover{background:rgba(0,0,0,
 <div class="us-sec" style="grid-column:1/-1">
   <div class="us-sh">&#x1f4ca; Monthly Plans</div>
   <div class="us-grid" id="monthlyGrid">
+    <div class="us-card" id="monMimo" style="border-color:rgba(34,197,94,0.3)"><div class="us-name" style="color:#22c55e">Xiaomi Mimo</div><div style="font-size:11px;color:var(--muted)">Loading...</div></div>
     <div class="us-card" id="monOpenCodeGo" style="border-color:rgba(245,158,11,0.3)"><div class="us-name" style="color:#f59e0b">OpenCode Go</div><div style="font-size:11px;color:var(--muted)">Loading...</div></div>
     <div class="us-card" id="monOpenAI" style="border-color:rgba(59,130,246,0.3)"><div class="us-name" style="color:var(--accent)">OpenAI</div><div style="font-size:11px;color:var(--muted)">Loading...</div></div>
   </div>
@@ -329,6 +330,20 @@ async function pollTokscale(){
       dsEl.innerHTML='<div class="us-name" style="color:var(--green)">DeepSeek</div><div style="font-size:11px;color:var(--muted)">No data</div>';
     }
     
+    // Xiaomi Mimo — from tokscale (xiaomi provider only)
+    var mimoEl=E('monMimo');
+    var mimo=d.mimo||{};
+    var mimoTotal=mimo.total_tokens||0;
+    var mimoPct=mimo.usage_pct||0;
+    var html='<div class="us-name" style="color:#22c55e">Xiaomi Mimo</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-bottom:6px">60M credits/mo flat (live)</div>';
+    html+='<div class="us-row"><div class="us-lb">Used</div>'
+       +'<div class="us-cb"><div class="us-cf" style="width:'+mimoPct+'%;background:#22c55e"></div></div>'
+       +'<div class="us-cn" style="color:'+capClr(mimoPct)+'">'+mimoPct.toFixed(1)+'%</div>'
+       +'<div class="us-cs">of 60M</div></div>';
+    html+='<div style="font-size:9px;color:var(--muted);margin-top:6px;text-align:center">'+(mimo.messageCount||0)+' messages &middot; '+mimo.input+' in</div>';
+    mimoEl.innerHTML=html;
+
     // OpenCode Zen (PAYG) - aggregate total, no model list
     // Note: Zen may have 30+ models, just show total cost
     var zenCost=0, zenIn=0, zenOut=0, zenMsgs=0;
@@ -363,6 +378,7 @@ async function pollUsage(){
     var bp=d.by_provider||{}, pw=d.by_provider_windows||{};
 
     // ── Monthly Plans ───────────────────────────────────────────────
+
 
     // OpenCode Go — read from config file (user updates manually)
     var goEl=E('monOpenCodeGo');
