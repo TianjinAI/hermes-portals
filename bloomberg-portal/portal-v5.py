@@ -2639,6 +2639,7 @@ function renderMomentumChart(market) {
   const scoreColor = s => s >= 8 ? '#0ECB81' : s >= 6 ? '#FFA028' : '#F6465D';
   const scoreBg = s => s >= 8 ? 'rgba(14,203,129,0.12)' : s >= 6 ? 'rgba(255,160,40,0.12)' : 'rgba(246,70,93,0.12)';
 
+  async function renderNews() {
   document.getElementById('content').innerHTML = '<div class="loading">Loading AI News...</div>';
   let articles = [];
   try {
@@ -2651,7 +2652,7 @@ function renderMomentumChart(market) {
     // silently fail
   }
   renderNewsArticles(articles);
-}
+  }
 
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1,3),16);
