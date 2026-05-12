@@ -6,6 +6,7 @@ import os
 import re
 from collections import Counter, defaultdict
 from datetime import datetime
+from functools import cmp_to_key
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -3261,8 +3262,16 @@ class Handler(BaseHTTPRequestHandler):
                     articles.append(data)
             except Exception:
                 pass
-        # Sort by composite_score desc
-        articles.sort(key=lambda a: a.get("composite_score", 0), reverse=True)
+        # Sort by published_at desc (newest first), then composite_score desc as tiebreaker
+        def _compare(a, b):
+            date_a = a.get("published_at", "")
+            date_b = b.get("published_at", "")
+            if date_b != date_a:
+                return (date_b > date_a) - (date_b < date_a)  # newer date first
+            score_a = a.get("composite_score", 0)
+            score_b = b.get("composite_score", 0)
+            return score_b - score_a  # higher score first
+        articles.sort(key=cmp_to_key(_compare))
         return {"articles": articles[:20]}
 
     def log_message(self, fmt, *args):
