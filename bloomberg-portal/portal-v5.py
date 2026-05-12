@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 PORT = int(os.environ.get("PORT", "5055"))
 DATA_DIR = Path.home() / ".hermes" / "bloomberg_digest"
+AI_NEWS_DIR = DATA_DIR / "ai_news"
 BRIEFS_DIR = DATA_DIR / "briefs"
 FULL_DIR = DATA_DIR / "full"
 SUMMARIES_DIR = DATA_DIR / "summaries"
@@ -95,10 +96,18 @@ CSS_VARS = """
     --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --radius: 10px;
     --radius-lg: 14px;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.30);
-    --shadow: 0 2px 8px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
-    --shadow-md: 0 8px 24px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.30);
+    --shadow-sm: 0 1px 3px rgba(5,8,12,0.30), 0 1px 2px rgba(5,8,12,0.20);
+    --shadow: 0 4px 16px rgba(5,8,12,0.35), 0 2px 4px rgba(5,8,12,0.22);
+    --shadow-md: 0 12px 32px rgba(5,8,12,0.42), 0 4px 12px rgba(5,8,12,0.25);
     --shadow-glow: 0 0 0 1px rgba(255,160,40,0.15);
+
+    /* Anti-Slop: Transition System */
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
+
+    /* Anti-Slop: Noise overlay opacity */
+    --noise-opacity: 0.025;
   }
 """
 
@@ -810,9 +819,23 @@ __WB_STYLES__
     font-family: var(--sans);
     background: var(--bg);
     color: var(--text);
-    min-height: 100vh;
+    min-height: 100dvh;
     font-size: 14px;
     line-height: 1.6;
+    position: relative;
+    font-variant-numeric: tabular-nums;
+  }}
+  /* Anti-Slop: Subtle noise grain overlay */
+  body::before {{
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: var(--noise-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 180px 180px;
   }}
   button, select {{ font: inherit; }}
   .header {{
@@ -822,7 +845,7 @@ __WB_STYLES__
     -webkit-backdrop-filter: blur(12px);
     color: white;
     border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.30);
+    box-shadow: 0 1px 4px rgba(5,8,12,0.30), 0 0 0 1px rgba(255,255,255,0.03);
   }}
   .header-inner {{
     max-width: 1400px; margin: 0 auto; min-height: 56px; padding: 10px 24px;
@@ -843,26 +866,62 @@ __WB_STYLES__
   .nav-btn, .action-btn {{
     background: var(--surface-alt); border: 1px solid var(--border); color: var(--text-secondary);
     cursor: pointer; border-radius: var(--radius); padding: 8px 14px;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: background var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo),
+                color var(--duration-fast) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo),
+                box-shadow var(--duration-fast) var(--ease-out-expo);
     font-family: var(--sans); font-weight: 500; font-size: 13px;
+    border: 1px solid var(--border);
+    outline: none;
   }}
-  .nav-btn:hover, .action-btn:hover {{ background: var(--surface-hover); color: var(--text); border-color: var(--text-muted); }}
+  .nav-btn:hover, .action-btn:hover {{
+    background: var(--surface-hover); color: var(--text); border-color: var(--text-muted);
+    transform: translateY(-1px);
+  }}
+  .nav-btn:active, .action-btn:active {{
+    transform: translateY(0) scale(0.98);
+    transition-duration: 80ms;
+  }}
+  .nav-btn:focus-visible, .action-btn:focus-visible {{
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-primary);
+  }}
   .date-btn {{ min-width: 140px; font-family: var(--mono); font-weight: 500; }}
   .view-tabs {{ display: flex; background: var(--surface); border-radius: var(--radius); padding: 3px; gap: 3px; border: 1px solid var(--border); }}
   .view-tabs button {{
     background: transparent; border: 0; color: var(--text-muted); padding: 8px 16px; border-radius: 8px;
     text-transform: uppercase; letter-spacing: 0.6px; font-size: 11px; font-weight: 600; cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background var(--duration-normal) var(--ease-out-expo),
+                color var(--duration-normal) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo);
+    outline: none;
+    position: relative;
   }}
-  .view-tabs button:hover {{ color: var(--text-secondary); }}
-  .view-tabs button.active {{ background: var(--accent); color: white; box-shadow: 0 2px 8px rgba(255,107,53,0.30); }}
+  .view-tabs button:hover {{ color: var(--text-secondary); background: rgba(255,255,255,0.04); }}
+  .view-tabs button:active {{ transform: scale(0.96); }}
+  .view-tabs button:focus-visible {{
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-primary);
+  }}
+  .view-tabs button.active {{
+    background: var(--accent); color: white;
+    box-shadow: 0 2px 10px rgba(255,107,53,0.30), 0 0 0 1px rgba(255,107,53,0.20);
+    transform: translateY(-1px);
+  }}
   .theme-toggle {{
     width: 36px; height: 36px; border-radius: var(--radius); border: 1px solid var(--border);
     background: var(--surface); color: var(--text-secondary); cursor: pointer;
     display: flex; align-items: center; justify-content: center; font-size: 16px;
-    transition: all 0.15s ease;
+    transition: background var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo),
+                color var(--duration-fast) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo),
+                box-shadow var(--duration-fast) var(--ease-out-expo);
+    outline: none;
   }}
-  .theme-toggle:hover {{ background: var(--surface-hover); color: var(--text); border-color: var(--text-muted); }}
+  .theme-toggle:hover {{ background: var(--surface-hover); color: var(--text); border-color: var(--text-muted); transform: translateY(-1px); }}
+  .theme-toggle:active {{ transform: scale(0.95); transition-duration: 80ms; }}
+  .theme-toggle:focus-visible {{ box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-primary); }}
   .page {{ max-width: 1400px; margin: 0 auto; padding: 24px 24px 40px; }}
   .section-header {{
     display: flex; align-items: center; gap: 10px; margin: 0 0 16px;
@@ -878,18 +937,22 @@ __WB_STYLES__
   .card {{
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm); padding: 20px; margin-bottom: 16px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: transform var(--duration-normal) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo),
+                border-color var(--duration-normal) var(--ease-out-expo);
   }}
   .card:hover {{
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+    border-color: rgba(255,255,255,0.08);
   }}
   @media (hover: none) {{
     .card:hover {{ transform: none; box-shadow: var(--shadow-sm); }}
   }}
   .hero {{ display: grid; grid-template-columns: 1.2fr .8fr; gap: 16px; margin-bottom: 20px; }}
-  .hero-title {{ font-size: 24px; line-height: 1.25; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.02em; text-wrap: balance; }}
-  .hero-sub {{ color: var(--text-secondary); max-width: 58ch; font-size: 14px; }}
+  .hero-title {{ font-size: 24px; line-height: 1.25; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.03em; text-wrap: balance; }}
+  .hero-sub {{ color: var(--text-secondary); max-width: 65ch; font-size: 14px; }}
   .hero-meta {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }}
   .chip {{
     display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 11px;
@@ -897,8 +960,8 @@ __WB_STYLES__
     font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
   }}
   .market-strip {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }}
-  .market-item {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }}
-  .market-item:hover {{ border-color: var(--border-light); box-shadow: var(--shadow); }}
+  .market-item {{ background: var(--surface); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm); transition: transform var(--duration-normal) var(--ease-out-expo), box-shadow var(--duration-normal) var(--ease-out-expo), border-color var(--duration-normal) var(--ease-out-expo); }}
+  .market-item:hover {{ border-color: rgba(255,255,255,0.08); box-shadow: var(--shadow); transform: translateY(-2px); }}
   .market-group {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }}
   .market-label {{ font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }}
   .market-value {{ font-family: var(--mono); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }}
@@ -912,10 +975,14 @@ __WB_STYLES__
   .story-card {{
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius-lg); padding: 18px; display: grid; grid-template-columns: 48px 1fr; gap: 14px;
-    position: relative; overflow: hidden; transition: all 0.2s ease;
+    position: relative; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: transform var(--duration-normal) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo),
+                border-left-color var(--duration-normal) var(--ease-out-expo);
     border-left: 3px solid transparent;
   }}
-  .story-card:hover {{ border-left-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }}
+  .story-card:hover {{ border-left-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: rgba(255,255,255,0.06); }}
   @media (hover: none) {{ .story-card:hover {{ transform: none; box-shadow: var(--shadow-sm); }} }}
   .story-rank {{
     width: 44px; height: 44px; border-radius: 12px; background: var(--accent-light); color: var(--accent);
@@ -952,6 +1019,51 @@ __WB_STYLES__
     display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 10px;
     text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; background: var(--accent-light); color: var(--accent);
   }}
+    /* Breaking Headlines — top row grid */
+  .breaking-top { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 900px) { .breaking-top { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .breaking-top { grid-template-columns: 1fr; } }
+  .breaking-card {{
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-alt) 100%);
+    border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px;
+    box-shadow: var(--shadow-sm); cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: transform var(--duration-normal) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo),
+                border-color var(--duration-normal) var(--ease-out-expo);
+    display: flex; flex-direction: column;
+  }}
+  .breaking-card:hover { border-color: rgba(255,255,255,0.08); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .breaking-card:active { transform: translateY(0) scale(0.985); }
+  .breaking-card .bc-meta { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .breaking-card .bc-meta .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--surface-alt); color: var(--text-secondary); border: 1px solid var(--border); }
+  .breaking-card .bc-tag { display: inline-flex; border-radius: 999px; padding: 3px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 8px; align-self: flex-start; }
+  .breaking-card .bc-title { font-size: 15px; font-weight: 600; line-height: 1.35; margin-bottom: 8px; text-wrap: balance; color: var(--text); }
+  .breaking-card .bc-preview { color: var(--text-muted); font-size: 12px; line-height: 1.5; flex: 1; }
+  .breaking-card .bc-footer { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-light); padding-top: 8px; }
+  .breaking-card .bc-sources { display: flex; gap: 4px; flex-wrap: wrap; }
+  .breaking-card .bc-sources .src-chip { font-size: 9px; padding: 2px 6px; border-radius: 999px; background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border-light); }
+  .breaking-card .bc-link { font-size: 11px; color: var(--accent-primary); text-decoration: none; white-space: nowrap; }
+  .breaking-card .bc-link:hover { text-decoration: underline; }
+
+.headline-feed {{ display: grid; gap: 8px; margin-bottom: 20px; }}
+  .headline-card {{
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px;
+    display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo);
+  }}
+  .headline-card:hover {{ border-color: var(--accent-border); background: var(--surface-hover); transform: translateY(-1px); }}
+  .headline-card:active {{ transform: translateY(0) scale(0.985); transition-duration: 80ms; }}
+  .headline-card .hl-tag {{ display: inline-flex; border-radius: 999px; padding: 2px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 4px; }}
+  .headline-card .hl-title {{ font-size: 14px; font-weight: 600; line-height: 1.35; }}
+  .headline-card .hl-preview {{ font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-top: 4px; }}
+  .headline-card .hl-meta {{ display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 80px; text-align: right; }}
+  .headline-card .hl-sources {{ font-size: 11px; color: var(--text-muted); font-family: var(--mono); }}
+  .headline-card .hl-links {{ font-size: 11px; color: var(--accent-primary); text-decoration: none; }}
+  .headline-card .hl-links:hover {{ text-decoration: underline; }}
+  .brief-updated {{ font-size: 11px; color: var(--text-muted); text-align: center; padding: 8px 0 16px; font-family: var(--mono); }}
   .watch-grid {{ display: grid; gap: 10px; }}
   .watch-item {{ display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }}
   .watch-item:last-child {{ border-bottom: 0; }}
@@ -1017,10 +1129,16 @@ __WB_STYLES__
     padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 500;
     background: var(--surface-alt); color: var(--text-secondary);
     cursor: pointer; border: 1px solid var(--border-light);
-    transition: all 150ms ease-out;
+    transition: background var(--duration-fast) var(--ease-out-expo),
+                color var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo);
+    outline: none;
   }}
-  .filter-pill:hover {{ background: var(--surface-hover); color: var(--text); }}
-  .filter-pill.active {{ background: var(--accent-primary); color: #0B0E11; border-color: var(--accent-primary); }}
+  .filter-pill:hover {{ background: var(--surface-hover); color: var(--text); transform: translateY(-1px); }}
+  .filter-pill:active {{ transform: translateY(0) scale(0.96); transition-duration: 80ms; }}
+  .filter-pill.active {{ background: var(--accent-primary); color: #0B0E11; border-color: var(--accent-primary); transform: translateY(-1px); }}
+  .filter-pill:focus-visible {{ box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-primary); }}
   .filter-spacer {{ flex: 1; }}
   .sort-btn {{ padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; background: transparent; color: var(--text-secondary); cursor: pointer; border: none; }}
   .sort-btn:hover {{ color: var(--text); }}
@@ -1210,6 +1328,7 @@ __WB_STYLES__
         <button id="tabIntel" onclick="setView('intel')">Intel</button>
         <button id="tabDd" onclick="setView('dd')">DD</button>
         <button id="tabMm" onclick="setView('mm')">MM</button>
+        <button id="tabNews" onclick="setView('news')">AI News</button>
       </div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">&#9788;</button>
     </div>
@@ -1226,6 +1345,53 @@ const cache = Object.create(null);
 function selectHeadline(index) {
   selectedHeadline = index;
   setView('full');
+}
+
+/* selectArticle: click a synthesized article on Brief tab → find matching headline → go to Full */
+var _briefArticlesCache = [];
+function selectArticle(articleIndex) {
+  if (articleIndex >= _briefArticlesCache.length) return;
+  var article = _briefArticlesCache[articleIndex];
+  if (!article) return;
+  /* Try to find matching headline by fuzzy title match */
+  var bestIdx = -1;
+  var bestScore = 0;
+  getDateData(currentDate).then(function(data) {
+    var brief = data.brief_parsed || { headlines: [] };
+    var hds = brief.headlines || [];
+    for (var hi = 0; hi < hds.length; hi++) {
+      var ht = (hds[hi].title || '').toLowerCase();
+      var at = (article.title || '').toLowerCase();
+      /* Simple word overlap scoring */
+      var hWords = ht.split(/\s+/);
+      var aWords = at.split(/\s+/);
+      var overlap = 0;
+      for (var wi = 0; wi < aWords.length; wi++) {
+        if (ht.indexOf(aWords[wi]) !== -1) overlap++;
+      }
+      var score = overlap / Math.max(hWords.length, aWords.length);
+      if (score > bestScore) { bestScore = score; bestIdx = hi; }
+    }
+    if (bestIdx >= 0 && bestScore > 0.4) {
+      selectedHeadline = bestIdx;
+    } else {
+      /* No match — show article inline via alert fallback */
+      selectedHeadline = null;
+    }
+    setView('full');
+  });
+}
+
+/* Auto-refresh Brief tab every 5 minutes */
+var _briefRefreshTimer = null;
+function startBriefRefresh() {
+  stopBriefRefresh();
+  _briefRefreshTimer = setInterval(function() {
+    if (currentView === 'brief') renderBrief();
+  }, 5 * 60 * 1000);
+}
+function stopBriefRefresh() {
+  if (_briefRefreshTimer) { clearInterval(_briefRefreshTimer); _briefRefreshTimer = null; }
 }
 
 function esc(value) {
@@ -1400,7 +1566,7 @@ function collectSourceExcerpts(newsletters, keywords) {
 }
 
 function setActiveTab() {
-  ['brief', 'full', 'intel', 'dd', 'mm'].forEach(view => {
+  ['brief', 'full', 'intel', 'dd', 'mm', 'news'].forEach(view => {
     document.getElementById('tab' + view.charAt(0).toUpperCase() + view.slice(1)).classList.toggle('active', currentView === view);
   });
 }
@@ -1463,7 +1629,7 @@ async function getDateData(dateStr) {
 async function render() {
   setActiveTab();
   document.getElementById('dateDisplay').textContent = currentDate || 'No dates';
-  if (!currentDate && currentView !== 'intel' && currentView !== 'dd' && currentView !== 'mm') {
+  if (!currentDate && currentView !== 'intel' && currentView !== 'dd' && currentView !== 'mm' && currentView !== 'news') {
     document.getElementById('content').innerHTML = '<div class="empty">No digest dates found.</div>';
     return;
   }
@@ -1472,11 +1638,13 @@ async function render() {
   if (currentView === 'intel') return renderIntel();
   if (currentView === 'dd') return renderDD();
   if (currentView === 'mm') return renderMM();
+  if (currentView === 'news') return renderNews();
   return renderBrief();  // fallback
 }
 
 function setView(view) {
   currentView = view;
+  if (view === 'brief') startBriefRefresh(); else stopBriefRefresh();
   render();
 }
 function switchView(v) { setView(v); }  // alias for onclick handlers
@@ -1625,40 +1793,143 @@ async function renderBrief() {
       </table>
     </div>` : '';
   const bottomLine = brief.bottom_line ? `<div class="card"><div class="section-header"><div class="section-icon" style="background:var(--purple-bg);color:var(--purple)">◎</div><div class="section-title">Bottom Line</div></div><div>${esc(brief.bottom_line)}</div></div>` : '';
-  document.getElementById('content').innerHTML = `
-    <div class="hero">
-      <div class="card">
-        <div class="hero-title">Ranked market brief for ${esc(currentDate)}</div>
-        <div class="hero-sub">Server-side markdown parsing now drives this view. Stories stay in market-impact order, market data is structured, and the watchlist is preserved as data instead of scraped HTML.</div>
-        <div class="hero-meta">
-          <span class="chip">${headlines.length} ranked stories</span>
-          <span class="chip">${market.length} market datapoints</span>
-          <span class="chip">${watch.length} watch items</span>
+  /* ---- Synthesized Articles (breaking headlines) ---- */
+  const articlesData = data.articles || null;
+  const articles = articlesData ? articlesData.articles || [] : [];
+  const articlesGenerated = articlesData ? articlesData.generated_at : null;
+  _briefArticlesCache = articles;
+  function stripMd(text, maxLen) {
+    if (!text) return '';
+    /* Strip markdown using pure string ops (avoids regex backslash issues in Python template) */
+    var s = text;
+    /* Remove bold ** markers */
+    while (s.indexOf(String.fromCharCode(42,42)) !== -1) {
+      var i = s.indexOf(String.fromCharCode(42,42));
+      var j = s.indexOf(String.fromCharCode(42,42), i + 2);
+      if (j === -1) break;
+      s = s.substring(0, i) + s.substring(i + 2, j) + s.substring(j + 2);
+    }
+    /* Remove italic * markers */
+    while (s.indexOf(String.fromCharCode(42)) !== -1) {
+      var i = s.indexOf(String.fromCharCode(42));
+      var j = s.indexOf(String.fromCharCode(42), i + 1);
+      if (j === -1) break;
+      s = s.substring(0, i) + s.substring(i + 1, j) + s.substring(j + 1);
+    }
+    /* Remove backtick code markers */
+    while (s.indexOf(String.fromCharCode(96)) !== -1) {
+      var i = s.indexOf(String.fromCharCode(96));
+      var j = s.indexOf(String.fromCharCode(96), i + 1);
+      if (j === -1) break;
+      s = s.substring(0, i) + s.substring(i + 1, j) + s.substring(j + 1);
+    }
+    /* Replace newlines with spaces, strip bullet prefixes */
+    var NL = String.fromCharCode(10);
+    var lines = s.split(NL);
+    s = lines.map(function(line) {
+      var l = line;
+      while (l.length > 0) {
+        var c = l.charCodeAt(0);
+        if (c === 35 || c === 62 || c === 45 || c === 8226 || c === 32 || c === 9) { l = l.substring(1); }
+        else break;
+      }
+      return l;
+    }).join(' ');
+    /* Collapse whitespace */
+    while (s.indexOf('  ') !== -1) s = s.replace('  ', ' ');
+    /* Trim leading/trailing whitespace char by char */
+    while (s.length > 0 && s.charCodeAt(0) <= 32) s = s.substring(1);
+    while (s.length > 0 && s.charCodeAt(s.length - 1) <= 32) s = s.substring(0, s.length - 1);
+    return s.length > maxLen ? s.substring(0, maxLen) + String.fromCharCode(8230) : s;
+  }
+  function tagColor(tag) {
+    const t = (tag || '').toUpperCase();
+    const map = { GEOPOLITICS: 'var(--red)', POLITICS: 'var(--purple)', MARKETS: 'var(--blue)', TECH: 'var(--cyan)', ECONOMY: 'var(--amber)', ENERGY: 'var(--up)', COMMODITIES: 'var(--amber)' };
+    return map[t] || 'var(--accent)';
+  }
+  function tagBg(tag) {
+    const t = (tag || '').toUpperCase();
+    const map = { GEOPOLITICS: 'var(--red-bg)', POLITICS: 'var(--purple-bg)', MARKETS: 'var(--blue-bg)', TECH: 'var(--cyan-bg)', ECONOMY: 'var(--amber-bg)', ENERGY: 'var(--up-bg)', COMMODITIES: 'var(--amber-bg)' };
+    return map[t] || 'var(--accent-light)';
+  }
+  function timeAgo(iso) {
+    if (!iso) return '';
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+  const newsletterCount = (data.newsletters || []).length;
+  let breakingHeroHtml = '';
+  let headlineFeedHtml = '';
+  if (articles.length > 0) {
+    /* Top N cards in a row — show up to 3 */
+    const topN = Math.min(3, articles.length);
+    var topCards = '';
+    for (var ti = 0; ti < topN; ti++) {
+      var a = articles[ti];
+      var t = (a.tags && a.tags[0]) || 'NEWS';
+      var prev = stripMd(a.article, 160);
+      var srcs = (a.sources || []).slice(0, 3).map(function(s) { return '<span class="src-chip">' + esc(s.newsletter) + '</span>'; }).join('');
+      var link = (a.links && a.links[0]) || '';
+      var linkHtml = link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener" class="bc-link" onclick="event.stopPropagation()">\u2197</a>' : '';
+      var badge = ti === 0 ? '<span class="chip" style="background:var(--accent-primary-bg);color:var(--accent-primary)">\u26A1 TOP</span>' : '<span class="chip">#' + (ti + 1) + '</span>';
+      topCards += '<div class="breaking-card" onclick="selectArticle(' + ti + ')">' +
+        '<div class="bc-meta">' + badge + '<span class="chip">' + esc(currentDate) + '</span></div>' +
+        '<div class="bc-tag" style="background:' + tagBg(t) + ';color:' + tagColor(t) + '">' + esc(t) + '</div>' +
+        '<div class="bc-title">' + esc(a.title) + '</div>' +
+        '<div class="bc-preview">' + esc(prev) + '</div>' +
+        '<div class="bc-footer"><div class="bc-sources">' + srcs + '</div>' + linkHtml + '</div>' +
+        '</div>';
+    }
+    breakingHeroHtml = '<div class="breaking-top">' + topCards + '</div>';
+    /* Remaining headlines as feed cards */
+    var feedCards = '';
+    for (var fi = topN; fi < articles.length; fi++) {
+      var a = articles[fi];
+      var t = (a.tags && a.tags[0]) || 'NEWS';
+      var prev = stripMd(a.article, 100);
+      var srcCount = (a.sources || []).length;
+      var linkCount = (a.links || []).length;
+      var firstLink = (a.links && a.links[0]) || '';
+      var linkHtml = firstLink ? '<a href="' + esc(firstLink) + '" target="_blank" rel="noopener" class="hl-links" onclick="event.stopPropagation()">\u2197</a>' : '';
+      feedCards += '<div class="headline-card" onclick="selectArticle(' + fi + ')">' +
+        '<div><div class="hl-tag" style="background:' + tagBg(t) + ';color:' + tagColor(t) + '">' + esc(t) + '</div>' +
+        '<div class="hl-title">' + esc(a.title) + '</div>' +
+        '<div class="hl-preview">' + esc(prev) + '</div></div>' +
+        '<div class="hl-meta"><div class="hl-sources">' + srcCount + ' src \u00b7 ' + linkCount + ' links</div>' +
+        linkHtml + '</div></div>';
+    }
+    headlineFeedHtml = feedCards ? '<div class="section-header"><div class="section-icon" style="background:var(--red-bg);color:var(--red)">•</div><div class="section-title">All Headlines</div><div class="section-count">' + (articles.length - topN) + ' more</div></div><div class="headline-feed">' + feedCards + '</div>' : '';
+  }
+  /* ---- Fallback: use brief_parsed headlines if no articles ---- */
+  if (!articles.length && headlines.length) {
+    breakingHeroHtml = `
+      <div class="hero" style="margin-bottom:20px">
+        <div class="card">
+          <div class="hero-meta" style="display:flex;gap:8px;margin-bottom:10px">
+            <span class="chip" style="background:var(--accent-primary-bg);color:var(--accent-primary)">📰 HEADLINES</span>
+            <span class="chip">${esc(currentDate)}</span>
+          </div>
+          <div class="hero-title" style="font-size:18px">${headlines.length} ranked stories from Bloomberg Daily Brief</div>
         </div>
-      </div>
-      <div class="card">
-        <div class="section-header"><div class="section-icon" style="background:var(--blue-bg);color:var(--blue)">📎</div><div class="section-title">Available Sources</div></div>
-        <div class="muted">Markdown brief: ${data.brief_markdown ? 'yes' : 'no'}<br/>Full digest HTML: ${data.full_html ? 'yes' : 'no'}<br/>Newsletter index: ${data.index ? 'yes' : 'no'}</div>
-      </div>
-    </div>
-    ${kpiHtml}
+      </div>`;
+    headlineFeedHtml = `<div class="story-list">${storyHtml}</div>`;
+  }
+  const updatedLabel = articlesGenerated ? `Updated ${timeAgo(articlesGenerated)}` : '';
+  document.getElementById('content').innerHTML = `
+    ${breakingHeroHtml}
+    ${headlineFeedHtml}
+    <div class="brief-updated">${updatedLabel}</div>
     ${moversHtml}
-    <div class="chart-grid">
-      <div class="chart-card">
-        <div class="chart-title">Market Momentum</div>
-        <div class="chart-container"><canvas id="briefMomentumChart"></canvas></div>
-      </div>
-    </div>
     <div class="section-header"><div class="section-icon" style="background:var(--green-bg);color:var(--green)">📊</div><div class="section-title">Market Data</div><div class="section-count">${market.length} items</div></div>
     <div class="market-strip">${marketHtml}</div>
-    <div class="section-header"><div class="section-icon" style="background:var(--red-bg);color:var(--red)">🔥</div><div class="section-title">Top Headlines</div><div class="section-count">${headlines.length} ranked</div></div>
-    <div class="story-list">${storyHtml}</div>
     <div class="section-header" style="margin-top:22px"><div class="section-icon" style="background:var(--amber-bg);color:var(--amber)">💡</div><div class="section-title">What To Watch</div><div class="section-count">${watch.length} items</div></div>
     <div class="card"><div class="watch-grid">${watchHtml}</div></div>
     ${quickHtml}
     ${bottomLine}
   `;
-  renderMomentumChart(market);
 }
 
 async function renderFull() {
@@ -2013,7 +2284,7 @@ async function renderDD() {
   const data = await res.json();
   const reports = data.reports || [];
   // Only market/economy deep-dive reports — NOT WB internal logistics (design briefs, skills, etc.)
-  const ddReports = reports.filter(r => r.path.includes('deep_dive'));
+  const ddReports = reports.filter(r => r.path.includes('deep_dive') || r.path.includes('dd_'));
 
   if (!ddReports.length) {
     document.getElementById('content').innerHTML = '<div class="empty">No WorkBuddy deep-dive reports found.</div>';
@@ -2246,6 +2517,147 @@ function renderMomentumChart(market) {
       }
     }
   });
+}
+
+// Category definitions for AI News filter
+  const CATEGORIES = [
+    { key: 'all',      label: '全部' },
+    { key: 'models',   label: '模型' },
+    { key: 'products', label: '产品' },
+    { key: 'industry', label: '行业' },
+    { key: 'papers',   label: '论文' },
+    { key: 'tips',     label: '技巧' },
+  ];
+  // Tag-to-category mapping
+  const TAG_CAT = {
+    models:   ['AI模型', 'AI模型发布', '模型发布', '模型', 'LLM', 'GPT', 'Claude', 'Gemini', 'Anthropic', 'OpenAI', 'Google', 'DeepSeek', 'Kimi', 'MiniMax', '阿里', '百度', '字节', 'AI代理', 'AI编码', 'AI应用'],
+    products: ['产品发布', '新品', '产品更新', 'AI应用', 'AI原生', 'AI初创'],
+    industry: ['行业', '融资', '诉讼', '监管', '市场竞争', '营销', '客户访谈', '公共卫生', '疫情', '可再生能源', '太阳能', '医疗技术', '马斯克'],
+    papers:   ['论文', '研究', '技术趋势', '未来展望', '开发者工具', '云基础设施'],
+    tips:     ['技巧', '教程', '指南', '社区热点'],
+  };
+  function articleCategory(a) {
+    const tags = a.tags || [];
+    const source = (a.source || '').toLowerCase();
+    for (const [cat, catTags] of Object.entries(TAG_CAT)) {
+      if (catTags.some(t => tags.includes(t) || source.includes(t.toLowerCase()))) return cat;
+    }
+    return 'all';
+  }
+
+  let activeCat = 'all';
+
+  function renderFilterBar(counts) {
+    return CATEGORIES.map(c => {
+      const cnt = counts[c.key] || 0;
+      const isActive = c.key === activeCat;
+      return `<button onclick="setNewsCat('${c.key}')" style="
+        padding:5px 14px;border-radius:20px;border:1px solid ${isActive?'var(--accent-primary)':'var(--border)'};
+        background:${isActive?'var(--accent-primary-bg)':'transparent'};
+        color:${isActive?'var(--accent-primary)':'var(--text-muted)'};
+        font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all 0.15s">
+        ${c.label} ${cnt > 0 ? '<span style="opacity:0.7">'+cnt+'</span>' : ''}
+      </button>`;
+    }).join('');
+  }
+
+  window.setNewsCat = function(cat) {
+    activeCat = cat;
+    renderNewsArticles(articles);
+  };
+
+  function renderNewsArticles(arts) {
+    const filtered = activeCat === 'all' ? arts : arts.filter(a => articleCategory(a) === activeCat);
+    const byDate = {};
+    filtered.forEach(a => {
+      const d = (a.published_at || '').slice(0, 10);
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(a);
+    });
+    const counts = {};
+    CATEGORIES.forEach(c => {
+      counts[c.key] = c.key === 'all' ? arts.length : arts.filter(a => articleCategory(a) === c.key).length;
+    });
+    const dateSections = Object.entries(byDate).map(([date, arts2]) => {
+      const cnDate = date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_, y, m, day) => `${parseInt(m)}月${parseInt(day)}日`);
+      const rows = arts2.map(a => {
+        const tc = tierColors[a.tier] || '#64748b';
+        const tbg = tierBg[a.tier] || 'rgba(100,116,139,0.12)';
+        const sc = a.composite_score || 0;
+        const time = (a.published_at || '').slice(11, 16);
+        const tags = (a.tags || []).slice(0, 3);
+        const tagHtml = tags.map(t => `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--surface-alt);color:var(--text-secondary);white-space:nowrap">${esc(t)}</span>`).join(' ');
+        return `<div style="display:grid;grid-template-columns:50px 1fr auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid var(--border-light)">
+          <div style="font-size:11px;color:var(--text-muted);padding-top:2px">${time || '--:--'}</div>
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:11px;color:${tc};font-weight:600">${esc(a.source || '')}</span>
+              <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${tbg};color:${tc};font-weight:600">${esc(a.tier || 'T2')}</span>
+              <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${scoreBg(sc)};color:${scoreColor(sc)};font-weight:700;font-family:monospace">${sc.toFixed(1)}</span>
+            </div>
+            <a href="${esc(a.url)}" target="_blank" rel="noopener" style="display:block;margin-top:4px;font-size:13px;color:var(--text);text-decoration:none;line-height:1.5">${esc(a.title || '')}</a>
+            ${a.summary ? `<div style="margin-top:4px;font-size:12px;color:var(--text-secondary);line-height:1.5">${esc(a.summary)}</div>` : ''}
+            ${tagHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${tagHtml}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:24px">
+        <div style="font-size:11px;font-weight:700;color:var(--accent-primary);letter-spacing:0.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">${cnDate}</div>
+        ${rows}
+      </div>`;
+    }).join('');
+    const totalCount = filtered.length;
+    const catCounts = {};
+    CATEGORIES.forEach(c => {
+      catCounts[c.key] = c.key === 'all' ? arts.length : arts.filter(a => articleCategory(a) === c.key).length;
+    });
+    document.getElementById('content').innerHTML = `
+      <div style="padding:20px 20px 16px;background:var(--surface);border-radius:12px;margin-bottom:20px;border:1px solid var(--border)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+          <div>
+            <div style="font-size:26px;font-weight:800;color:var(--text);line-height:1.2">精选</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">AI 自动挑选的高价值内容</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;padding-top:4px">
+            <span style="font-size:11px;color:var(--text-muted)">${totalCount} 条</span>
+            <span style="font-size:10px;padding:3px 8px;border-radius:20px;background:var(--accent-primary-bg);color:var(--accent-primary);font-weight:600">精选</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${renderFilterBar(catCounts)}</div>
+      </div>
+      ${totalCount === 0 ? `
+        <div style="text-align:center;padding:60px 0">
+          <div style="font-size:48px;margin-bottom:12px">📡</div>
+          <div style="color:var(--text-secondary);font-size:14px">暂无精选内容</div>
+          <div style="color:var(--text-muted);font-size:12px;margin-top:6px">AIHOT  pipeline 每日 09:00 服务器时间运行</div>
+        </div>` : dateSections}`;
+  }
+
+  // tier/score helpers are used in renderNewsArticles — redefine here for closure
+  const tierColors = {{ 'T1': '#10B981', 'T1.5': '#6366f1', 'T2': '#64748b' }};
+  const tierBg = {{ 'T1': 'rgba(16,185,129,0.12)', 'T1.5': 'rgba(99,102,241,0.12)', 'T2': 'rgba(100,116,139,0.12)' }};
+  const scoreColor = s => s >= 8 ? '#0ECB81' : s >= 6 ? '#FFA028' : '#F6465D';
+  const scoreBg = s => s >= 8 ? 'rgba(14,203,129,0.12)' : s >= 6 ? 'rgba(255,160,40,0.12)' : 'rgba(246,70,93,0.12)';
+
+  document.getElementById('content').innerHTML = '<div class="loading">Loading AI News...</div>';
+  let articles = [];
+  try {
+    const res = await fetch('/api/ai-news');
+    if (res.ok) {
+      const data = await res.json();
+      articles = data.articles || [];
+    }
+  } catch (e) {
+    // silently fail
+  }
+  renderNewsArticles(articles);
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
 }
 
 // Chart 2: Topic Heat Timeline (Intel view)
@@ -2586,6 +2998,37 @@ def parse_mm_primer():
         # Rejoin
         primer_md = before + "## 2. Chronological Newsletter Summaries (Most Recent First)\n\n" + "\n".join(entries)
 
+    # Inject article/PDF links from mm_article_links.json into the markdown
+    MM_LINKS_PATH = Path.home() / ".hermes" / "bloomberg-portal" / "mm_article_links.json"
+    mm_links = {}
+    try:
+        mm_links = json.loads(read_text(MM_LINKS_PATH) or "{}").get("links", {})
+    except Exception:
+        pass  # No links file or parse error — render without links
+    import re as _re
+    _PDF_ICON = "\U0001f4c4"  # 📄
+    if mm_links:
+        # Pass 1: Replace [PDF Download] in ### headers with linked version
+        for title_key, link_info in mm_links.items():
+            pattern = _re.compile(
+                r"(###\s+#\d+\s+\u2014\s+.+?" + _re.escape(title_key) + r".+?)(\[PDF Download\])",
+                _re.IGNORECASE,
+            )
+            link_html = '<a href="' + link_info["url"] + '" target="_blank" rel="noopener">' + _PDF_ICON + " " + link_info["label"] + "</a>"
+            replacement = lambda m, lh=link_html: m.group(1) + " " + lh
+            primer_md = pattern.sub(replacement, primer_md)
+        # Pass 2: For entries WITHOUT [PDF Download] tag but with a link, inject a line after header
+        for title_key, link_info in mm_links.items():
+            header_pattern = _re.compile(
+                r"(###\s+#\d+\s+\u2014\s+.+?" + _re.escape(title_key) + r".+?\n)",
+                _re.IGNORECASE,
+            )
+            m = header_pattern.search(primer_md)
+            if m and link_info["url"] not in primer_md:
+                link_html = '<a href="' + link_info["url"] + '" target="_blank" rel="noopener">' + _PDF_ICON + " " + link_info["label"] + "</a>"
+                link_line = "\n" + link_html + "\n"
+                primer_md = header_pattern.sub(lambda m, ll=link_line: m.group(1) + ll, primer_md)
+
     primer_html = markdown_to_html(primer_md)
 
     lines = content.splitlines()
@@ -2773,6 +3216,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_error(404, "MM primer not found")
                     return
                 self.respond_html(f"<html><head><meta charset='UTF-8'></head><body><pre>{esc(content)}</pre></body></html>")
+            elif path == "/api/ai-news":
+                self.respond_json(self.do_ai_news())
             else:
                 self.send_error(404, "Not found")
         except Exception as exc:
@@ -2800,6 +3245,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(body)
+
+    def do_ai_news(self):
+        """Return curated AIHOT articles from ai_news directory, sorted by score desc."""
+        if not AI_NEWS_DIR.exists():
+            return {"articles": []}
+        articles = []
+        for f in sorted(AI_NEWS_DIR.glob("*.json"), reverse=True):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    articles.extend(data)
+                elif isinstance(data, dict):
+                    articles.append(data)
+            except Exception:
+                pass
+        # Sort by composite_score desc
+        articles.sort(key=lambda a: a.get("composite_score", 0), reverse=True)
+        return {"articles": articles[:20]}
 
     def log_message(self, fmt, *args):
         return
