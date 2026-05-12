@@ -2546,6 +2546,7 @@ function renderMomentumChart(market) {
   }
 
   let activeCat = 'all';
+  let newsArticles = [];
 
   function renderFilterBar(counts) {
     return CATEGORIES.map(c => {
@@ -2563,7 +2564,7 @@ function renderMomentumChart(market) {
 
   window.setNewsCat = function(cat) {
     activeCat = cat;
-    renderNewsArticles(articles);
+    renderNewsArticles(newsArticles);
   };
 
   function renderNewsArticles(arts) {
@@ -2641,17 +2642,16 @@ function renderMomentumChart(market) {
 
   async function renderNews() {
   document.getElementById('content').innerHTML = '<div class="loading">Loading AI News...</div>';
-  let articles = [];
   try {
     const res = await fetch('/api/ai-news');
     if (res.ok) {
       const data = await res.json();
-      articles = data.articles || [];
+      newsArticles = data.articles || [];
     }
   } catch (e) {
     // silently fail
   }
-  renderNewsArticles(articles);
+  renderNewsArticles(newsArticles);
   }
 
 function hexToRgb(hex) {
