@@ -2560,6 +2560,19 @@ async function renderAINews() {
         const summary = a.summary ? '<div class="muted" style="margin-top:6px;font-size:12px">💡 ' + esc(a.summary) + '</div>' : '';
         const scoreColor = score >= 8 ? 'var(--up)' : score >= 7 ? 'var(--amber)' : 'var(--blue)';
         const scoreBg = score >= 8 ? 'var(--up-bg)' : score >= 7 ? 'var(--amber-bg)' : 'var(--blue-bg)';
+        // Format date
+        var dateStr = a.published_at ? esc(a.published_at.substring(0, 10)) : '';
+        var niceDate = dateStr;
+        if (dateStr) {
+          var parts = dateStr.split('-');
+          if (parts.length === 3) {
+            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            niceDate = months[parseInt(parts[1])-1] + ' ' + parseInt(parts[2]) + ', ' + parts[0];
+          }
+        }
+        var dateBadge = niceDate
+          ? '<span style="display:inline-block;font-size:11px;font-weight:600;background:var(--surface-alt);color:var(--text-muted);padding:1px 8px;border-radius:4px;margin-left:8px">' + niceDate + '</span>'
+          : '';
 
         html += '<div class="story-card" style="margin-bottom:12px">' +
           '<div class="story-rank" style="background:' + scoreBg + ';color:' + scoreColor + '">' + Math.round(score) + '</div>' +
@@ -2567,10 +2580,10 @@ async function renderAINews() {
             '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">' +
               '<span style="font-size:11px;color:var(--text-muted)">' + esc(a.source || '') + '</span>' +
               tierBadge +
-              '<span style="font-size:10px;color:var(--text-dim)">' + (a.published_at ? esc(a.published_at.substring(0, 10)) : '') + '</span>' +
             '</div>' +
             '<div class="story-title" style="margin-bottom:4px">' +
               '<a href="' + esc(a.url || '#') + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none">' + esc(a.title || 'Untitled') + '</a>' +
+              dateBadge +
             '</div>' +
             '<div class="muted" style="font-size:12px;line-height:1.5">' + snippet + (snippet.length >= 300 ? '...' : '') + '</div>' +
             summary +
@@ -3149,6 +3162,8 @@ def build_ai_news():
                     all_articles.append(a)
         except (json.JSONDecodeError, OSError):
             pass
+    # Sort by published_at descending (newest first)
+    all_articles.sort(key=lambda a: a.get("published_at", ""), reverse=True)
     return {"articles": all_articles, "dates": dates, "latest_date": dates[0] if dates else None}
 
 
