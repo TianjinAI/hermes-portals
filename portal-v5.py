@@ -11,14 +11,14 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 PORT = int(os.environ.get("PORT", "5055"))
-DATA_DIR = Path.home() / ".hermes" / "bloomberg_digest"
+DATA_DIR = Path("/home/admin/.hermes/bloomberg_digest")
 BRIEFS_DIR = DATA_DIR / "briefs"
 FULL_DIR = DATA_DIR / "full"
 SUMMARIES_DIR = DATA_DIR / "summaries"
 RAW_DIR = DATA_DIR / "raw"
 ARTICLES_DIR = DATA_DIR / "articles"
 KNOWLEDGE_BASE_PATH = DATA_DIR / "knowledge" / "knowledge_base.json"
-WORKBUDDY_DIR = Path.home() / ".hermes" / "workbuddy_reports"
+WORKBUDDY_DIR = Path("/home/admin/.hermes/workbuddy_reports")
 
 CSS_VARS = """
   :root {
@@ -95,10 +95,18 @@ CSS_VARS = """
     --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --radius: 10px;
     --radius-lg: 14px;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.30);
-    --shadow: 0 2px 8px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.25);
-    --shadow-md: 0 8px 24px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.30);
+    --shadow-sm: 0 1px 3px rgba(5,8,12,0.30), 0 1px 2px rgba(5,8,12,0.20);
+    --shadow: 0 4px 16px rgba(5,8,12,0.35), 0 2px 4px rgba(5,8,12,0.22);
+    --shadow-md: 0 12px 32px rgba(5,8,12,0.42), 0 4px 12px rgba(5,8,12,0.25);
     --shadow-glow: 0 0 0 1px rgba(255,160,40,0.15);
+
+    /* Anti-Slop: Transition System */
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
+
+    /* Anti-Slop: Noise overlay opacity */
+    --noise-opacity: 0.025;
   }
 """
 
@@ -810,9 +818,23 @@ __WB_STYLES__
     font-family: var(--sans);
     background: var(--bg);
     color: var(--text);
-    min-height: 100vh;
+    min-height: 100dvh;
     font-size: 14px;
     line-height: 1.6;
+    position: relative;
+    font-variant-numeric: tabular-nums;
+  }}
+  /* Anti-Slop: Subtle noise grain overlay */
+  body::before {{
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: var(--noise-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 180px 180px;
   }}
   button, select {{ font: inherit; }}
   .header {{
@@ -822,7 +844,7 @@ __WB_STYLES__
     -webkit-backdrop-filter: blur(12px);
     color: white;
     border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.30);
+    box-shadow: 0 1px 4px rgba(5,8,12,0.30), 0 0 0 1px rgba(255,255,255,0.03);
   }}
   .header-inner {{
     max-width: 1400px; margin: 0 auto; min-height: 56px; padding: 10px 24px;
@@ -843,26 +865,62 @@ __WB_STYLES__
   .nav-btn, .action-btn {{
     background: var(--surface-alt); border: 1px solid var(--border); color: var(--text-secondary);
     cursor: pointer; border-radius: var(--radius); padding: 8px 14px;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: background var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo),
+                color var(--duration-fast) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo),
+                box-shadow var(--duration-fast) var(--ease-out-expo);
     font-family: var(--sans); font-weight: 500; font-size: 13px;
+    border: 1px solid var(--border);
+    outline: none;
   }}
-  .nav-btn:hover, .action-btn:hover {{ background: var(--surface-hover); color: var(--text); border-color: var(--text-muted); }}
+  .nav-btn:hover, .action-btn:hover {{
+    background: var(--surface-hover); color: var(--text); border-color: var(--text-muted);
+    transform: translateY(-1px);
+  }}
+  .nav-btn:active, .action-btn:active {{
+    transform: translateY(0) scale(0.98);
+    transition-duration: 80ms;
+  }}
+  .nav-btn:focus-visible, .action-btn:focus-visible {{
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-primary);
+  }}
   .date-btn {{ min-width: 140px; font-family: var(--mono); font-weight: 500; }}
   .view-tabs {{ display: flex; background: var(--surface); border-radius: var(--radius); padding: 3px; gap: 3px; border: 1px solid var(--border); }}
   .view-tabs button {{
     background: transparent; border: 0; color: var(--text-muted); padding: 8px 16px; border-radius: 8px;
     text-transform: uppercase; letter-spacing: 0.6px; font-size: 11px; font-weight: 600; cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background var(--duration-normal) var(--ease-out-expo),
+                color var(--duration-normal) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo);
+    outline: none;
+    position: relative;
   }}
-  .view-tabs button:hover {{ color: var(--text-secondary); }}
-  .view-tabs button.active {{ background: var(--accent); color: white; box-shadow: 0 2px 8px rgba(255,107,53,0.30); }}
+  .view-tabs button:hover {{ color: var(--text-secondary); background: rgba(255,255,255,0.04); }}
+  .view-tabs button:active {{ transform: scale(0.96); }}
+  .view-tabs button:focus-visible {{
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-primary);
+  }}
+  .view-tabs button.active {{
+    background: var(--accent); color: white;
+    box-shadow: 0 2px 10px rgba(255,107,53,0.30), 0 0 0 1px rgba(255,107,53,0.20);
+    transform: translateY(-1px);
+  }}
   .theme-toggle {{
     width: 36px; height: 36px; border-radius: var(--radius); border: 1px solid var(--border);
     background: var(--surface); color: var(--text-secondary); cursor: pointer;
     display: flex; align-items: center; justify-content: center; font-size: 16px;
-    transition: all 0.15s ease;
+    transition: background var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo),
+                color var(--duration-fast) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo),
+                box-shadow var(--duration-fast) var(--ease-out-expo);
+    outline: none;
   }}
-  .theme-toggle:hover {{ background: var(--surface-hover); color: var(--text); border-color: var(--text-muted); }}
+  .theme-toggle:hover {{ background: var(--surface-hover); color: var(--text); border-color: var(--text-muted); transform: translateY(-1px); }}
+  .theme-toggle:active {{ transform: scale(0.95); transition-duration: 80ms; }}
+  .theme-toggle:focus-visible {{ box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-primary); }}
   .page {{ max-width: 1400px; margin: 0 auto; padding: 24px 24px 40px; }}
   .section-header {{
     display: flex; align-items: center; gap: 10px; margin: 0 0 16px;
@@ -878,18 +936,22 @@ __WB_STYLES__
   .card {{
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm); padding: 20px; margin-bottom: 16px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: transform var(--duration-normal) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo),
+                border-color var(--duration-normal) var(--ease-out-expo);
   }}
   .card:hover {{
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+    border-color: rgba(255,255,255,0.08);
   }}
   @media (hover: none) {{
     .card:hover {{ transform: none; box-shadow: var(--shadow-sm); }}
   }}
   .hero {{ display: grid; grid-template-columns: 1.2fr .8fr; gap: 16px; margin-bottom: 20px; }}
-  .hero-title {{ font-size: 24px; line-height: 1.25; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.02em; text-wrap: balance; }}
-  .hero-sub {{ color: var(--text-secondary); max-width: 58ch; font-size: 14px; }}
+  .hero-title {{ font-size: 24px; line-height: 1.25; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.03em; text-wrap: balance; }}
+  .hero-sub {{ color: var(--text-secondary); max-width: 65ch; font-size: 14px; }}
   .hero-meta {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }}
   .chip {{
     display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 11px;
@@ -897,8 +959,8 @@ __WB_STYLES__
     font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
   }}
   .market-strip {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }}
-  .market-item {{ background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm); transition: all 0.2s ease; }}
-  .market-item:hover {{ border-color: var(--border-light); box-shadow: var(--shadow); }}
+  .market-item {{ background: var(--surface); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm); transition: transform var(--duration-normal) var(--ease-out-expo), box-shadow var(--duration-normal) var(--ease-out-expo), border-color var(--duration-normal) var(--ease-out-expo); }}
+  .market-item:hover {{ border-color: rgba(255,255,255,0.08); box-shadow: var(--shadow); transform: translateY(-2px); }}
   .market-group {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }}
   .market-label {{ font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }}
   .market-value {{ font-family: var(--mono); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }}
@@ -912,10 +974,14 @@ __WB_STYLES__
   .story-card {{
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius-lg); padding: 18px; display: grid; grid-template-columns: 48px 1fr; gap: 14px;
-    position: relative; overflow: hidden; transition: all 0.2s ease;
+    position: relative; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: transform var(--duration-normal) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo),
+                border-left-color var(--duration-normal) var(--ease-out-expo);
     border-left: 3px solid transparent;
   }}
-  .story-card:hover {{ border-left-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }}
+  .story-card:hover {{ border-left-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: rgba(255,255,255,0.06); }}
   @media (hover: none) {{ .story-card:hover {{ transform: none; box-shadow: var(--shadow-sm); }} }}
   .story-rank {{
     width: 44px; height: 44px; border-radius: 12px; background: var(--accent-light); color: var(--accent);
@@ -952,6 +1018,51 @@ __WB_STYLES__
     display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 10px;
     text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; background: var(--accent-light); color: var(--accent);
   }}
+    /* Breaking Headlines — top row grid */
+  .breaking-top { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 900px) { .breaking-top { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .breaking-top { grid-template-columns: 1fr; } }
+  .breaking-card {{
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-alt) 100%);
+    border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px;
+    box-shadow: var(--shadow-sm); cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: transform var(--duration-normal) var(--ease-out-expo),
+                box-shadow var(--duration-normal) var(--ease-out-expo),
+                border-color var(--duration-normal) var(--ease-out-expo);
+    display: flex; flex-direction: column;
+  }}
+  .breaking-card:hover { border-color: rgba(255,255,255,0.08); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .breaking-card:active { transform: translateY(0) scale(0.985); }
+  .breaking-card .bc-meta { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .breaking-card .bc-meta .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 600; background: var(--surface-alt); color: var(--text-secondary); border: 1px solid var(--border); }
+  .breaking-card .bc-tag { display: inline-flex; border-radius: 999px; padding: 3px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 8px; align-self: flex-start; }
+  .breaking-card .bc-title { font-size: 15px; font-weight: 600; line-height: 1.35; margin-bottom: 8px; text-wrap: balance; color: var(--text); }
+  .breaking-card .bc-preview { color: var(--text-muted); font-size: 12px; line-height: 1.5; flex: 1; }
+  .breaking-card .bc-footer { margin-top: 10px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-light); padding-top: 8px; }
+  .breaking-card .bc-sources { display: flex; gap: 4px; flex-wrap: wrap; }
+  .breaking-card .bc-sources .src-chip { font-size: 9px; padding: 2px 6px; border-radius: 999px; background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border-light); }
+  .breaking-card .bc-link { font-size: 11px; color: var(--accent-primary); text-decoration: none; white-space: nowrap; }
+  .breaking-card .bc-link:hover { text-decoration: underline; }
+
+.headline-feed {{ display: grid; gap: 8px; margin-bottom: 20px; }}
+  .headline-card {{
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px;
+    display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo);
+  }}
+  .headline-card:hover {{ border-color: var(--accent-border); background: var(--surface-hover); transform: translateY(-1px); }}
+  .headline-card:active {{ transform: translateY(0) scale(0.985); transition-duration: 80ms; }}
+  .headline-card .hl-tag {{ display: inline-flex; border-radius: 999px; padding: 2px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; margin-bottom: 4px; }}
+  .headline-card .hl-title {{ font-size: 14px; font-weight: 600; line-height: 1.35; }}
+  .headline-card .hl-preview {{ font-size: 12px; color: var(--text-muted); line-height: 1.4; margin-top: 4px; }}
+  .headline-card .hl-meta {{ display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 80px; text-align: right; }}
+  .headline-card .hl-sources {{ font-size: 11px; color: var(--text-muted); font-family: var(--mono); }}
+  .headline-card .hl-links {{ font-size: 11px; color: var(--accent-primary); text-decoration: none; }}
+  .headline-card .hl-links:hover {{ text-decoration: underline; }}
+  .brief-updated {{ font-size: 11px; color: var(--text-muted); text-align: center; padding: 8px 0 16px; font-family: var(--mono); }}
   .watch-grid {{ display: grid; gap: 10px; }}
   .watch-item {{ display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }}
   .watch-item:last-child {{ border-bottom: 0; }}
@@ -1017,10 +1128,16 @@ __WB_STYLES__
     padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 500;
     background: var(--surface-alt); color: var(--text-secondary);
     cursor: pointer; border: 1px solid var(--border-light);
-    transition: all 150ms ease-out;
+    transition: background var(--duration-fast) var(--ease-out-expo),
+                color var(--duration-fast) var(--ease-out-expo),
+                border-color var(--duration-fast) var(--ease-out-expo),
+                transform var(--duration-fast) var(--ease-out-expo);
+    outline: none;
   }}
-  .filter-pill:hover {{ background: var(--surface-hover); color: var(--text); }}
-  .filter-pill.active {{ background: var(--accent-primary); color: #0B0E11; border-color: var(--accent-primary); }}
+  .filter-pill:hover {{ background: var(--surface-hover); color: var(--text); transform: translateY(-1px); }}
+  .filter-pill:active {{ transform: translateY(0) scale(0.96); transition-duration: 80ms; }}
+  .filter-pill.active {{ background: var(--accent-primary); color: #0B0E11; border-color: var(--accent-primary); transform: translateY(-1px); }}
+  .filter-pill:focus-visible {{ box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-primary); }}
   .filter-spacer {{ flex: 1; }}
   .sort-btn {{ padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; background: transparent; color: var(--text-secondary); cursor: pointer; border: none; }}
   .sort-btn:hover {{ color: var(--text); }}
@@ -1210,6 +1327,7 @@ __WB_STYLES__
         <button id="tabIntel" onclick="setView('intel')">Intel</button>
         <button id="tabDd" onclick="setView('dd')">DD</button>
         <button id="tabMm" onclick="setView('mm')">MM</button>
+        <button id="tabAi" onclick="setView('ai')">AI News</button>
       </div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">&#9788;</button>
     </div>
@@ -1226,6 +1344,53 @@ const cache = Object.create(null);
 function selectHeadline(index) {
   selectedHeadline = index;
   setView('full');
+}
+
+/* selectArticle: click a synthesized article on Brief tab → find matching headline → go to Full */
+var _briefArticlesCache = [];
+function selectArticle(articleIndex) {
+  if (articleIndex >= _briefArticlesCache.length) return;
+  var article = _briefArticlesCache[articleIndex];
+  if (!article) return;
+  /* Try to find matching headline by fuzzy title match */
+  var bestIdx = -1;
+  var bestScore = 0;
+  getDateData(currentDate).then(function(data) {
+    var brief = data.brief_parsed || { headlines: [] };
+    var hds = brief.headlines || [];
+    for (var hi = 0; hi < hds.length; hi++) {
+      var ht = (hds[hi].title || '').toLowerCase();
+      var at = (article.title || '').toLowerCase();
+      /* Simple word overlap scoring */
+      var hWords = ht.split(/\s+/);
+      var aWords = at.split(/\s+/);
+      var overlap = 0;
+      for (var wi = 0; wi < aWords.length; wi++) {
+        if (ht.indexOf(aWords[wi]) !== -1) overlap++;
+      }
+      var score = overlap / Math.max(hWords.length, aWords.length);
+      if (score > bestScore) { bestScore = score; bestIdx = hi; }
+    }
+    if (bestIdx >= 0 && bestScore > 0.4) {
+      selectedHeadline = bestIdx;
+    } else {
+      /* No match — show article inline via alert fallback */
+      selectedHeadline = null;
+    }
+    setView('full');
+  });
+}
+
+/* Auto-refresh Brief tab every 5 minutes */
+var _briefRefreshTimer = null;
+function startBriefRefresh() {
+  stopBriefRefresh();
+  _briefRefreshTimer = setInterval(function() {
+    if (currentView === 'brief') renderBrief();
+  }, 5 * 60 * 1000);
+}
+function stopBriefRefresh() {
+  if (_briefRefreshTimer) { clearInterval(_briefRefreshTimer); _briefRefreshTimer = null; }
 }
 
 function esc(value) {
@@ -1472,11 +1637,13 @@ async function render() {
   if (currentView === 'intel') return renderIntel();
   if (currentView === 'dd') return renderDD();
   if (currentView === 'mm') return renderMM();
+  if (currentView === 'ai') return renderAINews();
   return renderBrief();  // fallback
 }
 
 function setView(view) {
   currentView = view;
+  if (view === 'brief') startBriefRefresh(); else stopBriefRefresh();
   render();
 }
 function switchView(v) { setView(v); }  // alias for onclick handlers
@@ -1625,40 +1792,143 @@ async function renderBrief() {
       </table>
     </div>` : '';
   const bottomLine = brief.bottom_line ? `<div class="card"><div class="section-header"><div class="section-icon" style="background:var(--purple-bg);color:var(--purple)">◎</div><div class="section-title">Bottom Line</div></div><div>${esc(brief.bottom_line)}</div></div>` : '';
-  document.getElementById('content').innerHTML = `
-    <div class="hero">
-      <div class="card">
-        <div class="hero-title">Ranked market brief for ${esc(currentDate)}</div>
-        <div class="hero-sub">Server-side markdown parsing now drives this view. Stories stay in market-impact order, market data is structured, and the watchlist is preserved as data instead of scraped HTML.</div>
-        <div class="hero-meta">
-          <span class="chip">${headlines.length} ranked stories</span>
-          <span class="chip">${market.length} market datapoints</span>
-          <span class="chip">${watch.length} watch items</span>
+  /* ---- Synthesized Articles (breaking headlines) ---- */
+  const articlesData = data.articles || null;
+  const articles = articlesData ? articlesData.articles || [] : [];
+  const articlesGenerated = articlesData ? articlesData.generated_at : null;
+  _briefArticlesCache = articles;
+  function stripMd(text, maxLen) {
+    if (!text) return '';
+    /* Strip markdown using pure string ops (avoids regex backslash issues in Python template) */
+    var s = text;
+    /* Remove bold ** markers */
+    while (s.indexOf(String.fromCharCode(42,42)) !== -1) {
+      var i = s.indexOf(String.fromCharCode(42,42));
+      var j = s.indexOf(String.fromCharCode(42,42), i + 2);
+      if (j === -1) break;
+      s = s.substring(0, i) + s.substring(i + 2, j) + s.substring(j + 2);
+    }
+    /* Remove italic * markers */
+    while (s.indexOf(String.fromCharCode(42)) !== -1) {
+      var i = s.indexOf(String.fromCharCode(42));
+      var j = s.indexOf(String.fromCharCode(42), i + 1);
+      if (j === -1) break;
+      s = s.substring(0, i) + s.substring(i + 1, j) + s.substring(j + 1);
+    }
+    /* Remove backtick code markers */
+    while (s.indexOf(String.fromCharCode(96)) !== -1) {
+      var i = s.indexOf(String.fromCharCode(96));
+      var j = s.indexOf(String.fromCharCode(96), i + 1);
+      if (j === -1) break;
+      s = s.substring(0, i) + s.substring(i + 1, j) + s.substring(j + 1);
+    }
+    /* Replace newlines with spaces, strip bullet prefixes */
+    var NL = String.fromCharCode(10);
+    var lines = s.split(NL);
+    s = lines.map(function(line) {
+      var l = line;
+      while (l.length > 0) {
+        var c = l.charCodeAt(0);
+        if (c === 35 || c === 62 || c === 45 || c === 8226 || c === 32 || c === 9) { l = l.substring(1); }
+        else break;
+      }
+      return l;
+    }).join(' ');
+    /* Collapse whitespace */
+    while (s.indexOf('  ') !== -1) s = s.replace('  ', ' ');
+    /* Trim leading/trailing whitespace char by char */
+    while (s.length > 0 && s.charCodeAt(0) <= 32) s = s.substring(1);
+    while (s.length > 0 && s.charCodeAt(s.length - 1) <= 32) s = s.substring(0, s.length - 1);
+    return s.length > maxLen ? s.substring(0, maxLen) + String.fromCharCode(8230) : s;
+  }
+  function tagColor(tag) {
+    const t = (tag || '').toUpperCase();
+    const map = { GEOPOLITICS: 'var(--red)', POLITICS: 'var(--purple)', MARKETS: 'var(--blue)', TECH: 'var(--cyan)', ECONOMY: 'var(--amber)', ENERGY: 'var(--up)', COMMODITIES: 'var(--amber)' };
+    return map[t] || 'var(--accent)';
+  }
+  function tagBg(tag) {
+    const t = (tag || '').toUpperCase();
+    const map = { GEOPOLITICS: 'var(--red-bg)', POLITICS: 'var(--purple-bg)', MARKETS: 'var(--blue-bg)', TECH: 'var(--cyan-bg)', ECONOMY: 'var(--amber-bg)', ENERGY: 'var(--up-bg)', COMMODITIES: 'var(--amber-bg)' };
+    return map[t] || 'var(--accent-light)';
+  }
+  function timeAgo(iso) {
+    if (!iso) return '';
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  }
+  const newsletterCount = (data.newsletters || []).length;
+  let breakingHeroHtml = '';
+  let headlineFeedHtml = '';
+  if (articles.length > 0) {
+    /* Top N cards in a row — show up to 3 */
+    const topN = Math.min(3, articles.length);
+    var topCards = '';
+    for (var ti = 0; ti < topN; ti++) {
+      var a = articles[ti];
+      var t = (a.tags && a.tags[0]) || 'NEWS';
+      var prev = stripMd(a.article, 160);
+      var srcs = (a.sources || []).slice(0, 3).map(function(s) { return '<span class="src-chip">' + esc(s.newsletter) + '</span>'; }).join('');
+      var link = (a.links && a.links[0]) || '';
+      var linkHtml = link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener" class="bc-link" onclick="event.stopPropagation()">\u2197</a>' : '';
+      var badge = ti === 0 ? '<span class="chip" style="background:var(--accent-primary-bg);color:var(--accent-primary)">\u26A1 TOP</span>' : '<span class="chip">#' + (ti + 1) + '</span>';
+      topCards += '<div class="breaking-card" onclick="selectArticle(' + ti + ')">' +
+        '<div class="bc-meta">' + badge + '<span class="chip">' + esc(currentDate) + '</span></div>' +
+        '<div class="bc-tag" style="background:' + tagBg(t) + ';color:' + tagColor(t) + '">' + esc(t) + '</div>' +
+        '<div class="bc-title">' + esc(a.title) + '</div>' +
+        '<div class="bc-preview">' + esc(prev) + '</div>' +
+        '<div class="bc-footer"><div class="bc-sources">' + srcs + '</div>' + linkHtml + '</div>' +
+        '</div>';
+    }
+    breakingHeroHtml = '<div class="breaking-top">' + topCards + '</div>';
+    /* Remaining headlines as feed cards */
+    var feedCards = '';
+    for (var fi = topN; fi < articles.length; fi++) {
+      var a = articles[fi];
+      var t = (a.tags && a.tags[0]) || 'NEWS';
+      var prev = stripMd(a.article, 100);
+      var srcCount = (a.sources || []).length;
+      var linkCount = (a.links || []).length;
+      var firstLink = (a.links && a.links[0]) || '';
+      var linkHtml = firstLink ? '<a href="' + esc(firstLink) + '" target="_blank" rel="noopener" class="hl-links" onclick="event.stopPropagation()">\u2197</a>' : '';
+      feedCards += '<div class="headline-card" onclick="selectArticle(' + fi + ')">' +
+        '<div><div class="hl-tag" style="background:' + tagBg(t) + ';color:' + tagColor(t) + '">' + esc(t) + '</div>' +
+        '<div class="hl-title">' + esc(a.title) + '</div>' +
+        '<div class="hl-preview">' + esc(prev) + '</div></div>' +
+        '<div class="hl-meta"><div class="hl-sources">' + srcCount + ' src \u00b7 ' + linkCount + ' links</div>' +
+        linkHtml + '</div></div>';
+    }
+    headlineFeedHtml = feedCards ? '<div class="section-header"><div class="section-icon" style="background:var(--red-bg);color:var(--red)">•</div><div class="section-title">All Headlines</div><div class="section-count">' + (articles.length - topN) + ' more</div></div><div class="headline-feed">' + feedCards + '</div>' : '';
+  }
+  /* ---- Fallback: use brief_parsed headlines if no articles ---- */
+  if (!articles.length && headlines.length) {
+    breakingHeroHtml = `
+      <div class="hero" style="margin-bottom:20px">
+        <div class="card">
+          <div class="hero-meta" style="display:flex;gap:8px;margin-bottom:10px">
+            <span class="chip" style="background:var(--accent-primary-bg);color:var(--accent-primary)">📰 HEADLINES</span>
+            <span class="chip">${esc(currentDate)}</span>
+          </div>
+          <div class="hero-title" style="font-size:18px">${headlines.length} ranked stories from Bloomberg Daily Brief</div>
         </div>
-      </div>
-      <div class="card">
-        <div class="section-header"><div class="section-icon" style="background:var(--blue-bg);color:var(--blue)">📎</div><div class="section-title">Available Sources</div></div>
-        <div class="muted">Markdown brief: ${data.brief_markdown ? 'yes' : 'no'}<br/>Full digest HTML: ${data.full_html ? 'yes' : 'no'}<br/>Newsletter index: ${data.index ? 'yes' : 'no'}</div>
-      </div>
-    </div>
-    ${kpiHtml}
+      </div>`;
+    headlineFeedHtml = `<div class="story-list">${storyHtml}</div>`;
+  }
+  const updatedLabel = articlesGenerated ? `Updated ${timeAgo(articlesGenerated)}` : '';
+  document.getElementById('content').innerHTML = `
+    ${breakingHeroHtml}
+    ${headlineFeedHtml}
+    <div class="brief-updated">${updatedLabel}</div>
     ${moversHtml}
-    <div class="chart-grid">
-      <div class="chart-card">
-        <div class="chart-title">Market Momentum</div>
-        <div class="chart-container"><canvas id="briefMomentumChart"></canvas></div>
-      </div>
-    </div>
     <div class="section-header"><div class="section-icon" style="background:var(--green-bg);color:var(--green)">📊</div><div class="section-title">Market Data</div><div class="section-count">${market.length} items</div></div>
     <div class="market-strip">${marketHtml}</div>
-    <div class="section-header"><div class="section-icon" style="background:var(--red-bg);color:var(--red)">🔥</div><div class="section-title">Top Headlines</div><div class="section-count">${headlines.length} ranked</div></div>
-    <div class="story-list">${storyHtml}</div>
     <div class="section-header" style="margin-top:22px"><div class="section-icon" style="background:var(--amber-bg);color:var(--amber)">💡</div><div class="section-title">What To Watch</div><div class="section-count">${watch.length} items</div></div>
     <div class="card"><div class="watch-grid">${watchHtml}</div></div>
     ${quickHtml}
     ${bottomLine}
   `;
-  renderMomentumChart(market);
 }
 
 async function renderFull() {
@@ -2013,7 +2283,7 @@ async function renderDD() {
   const data = await res.json();
   const reports = data.reports || [];
   // Only market/economy deep-dive reports — NOT WB internal logistics (design briefs, skills, etc.)
-  const ddReports = reports.filter(r => r.path.includes('deep_dive'));
+  const ddReports = reports.filter(r => r.path.includes('deep_dive') || r.path.includes('dd_'));
 
   if (!ddReports.length) {
     document.getElementById('content').innerHTML = '<div class="empty">No WorkBuddy deep-dive reports found.</div>';
@@ -2196,6 +2466,127 @@ const CHART_COLORS = {
 function destroyChart(id) {
   const existing = Chart.getChart(id);
   if (existing) existing.destroy();
+}
+
+// ── AI News Tab ──────────────────────────────────────────────────────────
+async function renderAINews() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading">Loading AI news...</div>';
+  try {
+    const res = await fetch('/api/ai-news');
+    const data = await res.json();
+    let articles = data.articles || [];
+
+    if (articles.length === 0) {
+      el.innerHTML = '<div class="empty"><div style="font-size:40px;margin-bottom:12px">🤖</div><div>No AI news available yet.</div><div class="muted" style="margin-top:8px">Run the aihot pipeline to generate curated AI news.</div></div>';
+      return;
+    }
+
+    // Collect filter options
+    const allSources = [...new Set(articles.map(a => a.source || 'Unknown'))];
+    const allTags = [...new Set(articles.flatMap(a => a.tags || []))];
+
+    // Build filter bar HTML
+    let filterHtml = `
+      <div class="filter-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px;background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border)">
+        <span style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Filters</span>
+        <select id="aiFilterSource" onchange="applyAiFilters()" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">
+          <option value="all">All Sources</option>
+          ${allSources.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+        </select>
+        <select id="aiFilterTier" onchange="applyAiFilters()" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">
+          <option value="all">All Tiers</option>
+          <option value="T1">T1 (Official)</option>
+          <option value="T2">T2 (Media)</option>
+        </select>
+        <select id="aiFilterTag" onchange="applyAiFilters()" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">
+          <option value="all">All Tags</option>
+          ${allTags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
+        </select>
+        <select id="aiFilterScore" onchange="applyAiFilters()" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">
+          <option value="all">Min Score</option>
+          <option value="8">8+</option>
+          <option value="7">7+</option>
+          <option value="6">6+</option>
+        </select>
+        <span style="font-size:11px;color:var(--text-muted)">${articles.length} stories · updated ${esc(data.latest_date || 'recent')}</span>
+      </div>
+      <div id="aiNewsContainer"></div>`;
+
+    el.innerHTML = filterHtml;
+
+    // Store for filter to use
+    window._aiArticles = articles;
+
+    // Render with current filter state
+    window.applyAiFilters = function() {
+      const sourceF = document.getElementById('aiFilterSource')?.value || 'all';
+      const tierF = document.getElementById('aiFilterTier')?.value || 'all';
+      const tagF = document.getElementById('aiFilterTag')?.value || 'all';
+      const scoreF = parseInt(document.getElementById('aiFilterScore')?.value) || 0;
+
+      let filtered = window._aiArticles.filter(a => {
+        if (sourceF !== 'all' && a.source !== sourceF) return false;
+        if (tierF !== 'all' && a.tier !== tierF) return false;
+        if (tagF !== 'all' && !(a.tags || []).includes(tagF)) return false;
+        if (scoreF > 0 && (a.composite_score || 0) < scoreF) return false;
+        return true;
+      });
+
+      const container = document.getElementById('aiNewsContainer');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty" style="padding:40px 0">No articles match the selected filters.</div>';
+        return;
+      }
+
+      // Sources badge
+      const srcCounts = {};
+      filtered.forEach(a => { const s = a.source || 'Unknown'; srcCounts[s] = (srcCounts[s] || 0) + 1; });
+      const srcHtml = Object.entries(srcCounts).map(([s, c]) =>
+        '<span class="chip" style="background:var(--accent-light);color:var(--accent)">' + esc(s) + ' (' + c + ')</span>'
+      ).join(' ');
+
+      let html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + srcHtml + '</div>';
+      html += '<div class="news-feed">';
+
+      filtered.forEach((a, i) => {
+        const score = a.composite_score || 0;
+        const tier = a.tier || '';
+        const tierBadge = tier === 'T1'
+          ? '<span class="chip" style="background:var(--up-bg);color:var(--up)">T1</span>'
+          : '<span class="chip" style="background:var(--amber-bg);color:var(--amber)">T2</span>';
+        const tags = (a.tags || []).map(function(t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('');
+        const snippet = esc((a.snippet || '').replace(/<[^>]+>/g, '').substring(0, 300));
+        const summary = a.summary ? '<div class="muted" style="margin-top:6px;font-size:12px">💡 ' + esc(a.summary) + '</div>' : '';
+        const scoreColor = score >= 8 ? 'var(--up)' : score >= 7 ? 'var(--amber)' : 'var(--blue)';
+        const scoreBg = score >= 8 ? 'var(--up-bg)' : score >= 7 ? 'var(--amber-bg)' : 'var(--blue-bg)';
+
+        html += '<div class="story-card" style="margin-bottom:12px">' +
+          '<div class="story-rank" style="background:' + scoreBg + ';color:' + scoreColor + '">' + Math.round(score) + '</div>' +
+          '<div>' +
+            '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">' +
+              '<span style="font-size:11px;color:var(--text-muted)">' + esc(a.source || '') + '</span>' +
+              tierBadge +
+              '<span style="font-size:10px;color:var(--text-dim)">' + (a.published_at ? esc(a.published_at.substring(0, 10)) : '') + '</span>' +
+            '</div>' +
+            '<div class="story-title" style="margin-bottom:4px">' +
+              '<a href="' + esc(a.url || '#') + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none">' + esc(a.title || 'Untitled') + '</a>' +
+            '</div>' +
+            '<div class="muted" style="font-size:12px;line-height:1.5">' + snippet + (snippet.length >= 300 ? '...' : '') + '</div>' +
+            summary +
+            '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">' + tags + '</div>' +
+          '</div></div>';
+      });
+
+      html += '</div>';
+      container.innerHTML = html;
+    };
+
+    // Initial render
+    window.applyAiFilters();
+  } catch (err) {
+    el.innerHTML = '<div class="empty">⚠️ Failed to load AI news: ' + esc(err.message) + '</div>';
+  }
 }
 
 // Chart 1: Market Momentum (Brief view)
@@ -2559,7 +2950,7 @@ def inline_markdown(text):
     return text
 
 
-MM_PRIMER_PATH = Path.home() / ".hermes" / "bloomberg-portal" / "macromicro_primer.md"
+MM_PRIMER_PATH = Path("/home/admin/.hermes/bloomberg-portal/macromicro_primer.md")
 
 
 def parse_mm_primer():
@@ -2585,6 +2976,37 @@ def parse_mm_primer():
         entries.reverse()
         # Rejoin
         primer_md = before + "## 2. Chronological Newsletter Summaries (Most Recent First)\n\n" + "\n".join(entries)
+
+    # Inject article/PDF links from mm_article_links.json into the markdown
+    MM_LINKS_PATH = Path("/home/admin/.hermes/bloomberg-portal/mm_article_links.json")
+    mm_links = {}
+    try:
+        mm_links = json.loads(read_text(MM_LINKS_PATH) or "{}").get("links", {})
+    except Exception:
+        pass  # No links file or parse error — render without links
+    import re as _re
+    _PDF_ICON = "\U0001f4c4"  # 📄
+    if mm_links:
+        # Pass 1: Replace [PDF Download] in ### headers with linked version
+        for title_key, link_info in mm_links.items():
+            pattern = _re.compile(
+                r"(###\s+#\d+\s+\u2014\s+.+?" + _re.escape(title_key) + r".+?)(\[PDF Download\])",
+                _re.IGNORECASE,
+            )
+            link_html = '<a href="' + link_info["url"] + '" target="_blank" rel="noopener">' + _PDF_ICON + " " + link_info["label"] + "</a>"
+            replacement = lambda m, lh=link_html: m.group(1) + " " + lh
+            primer_md = pattern.sub(replacement, primer_md)
+        # Pass 2: For entries WITHOUT [PDF Download] tag but with a link, inject a line after header
+        for title_key, link_info in mm_links.items():
+            header_pattern = _re.compile(
+                r"(###\s+#\d+\s+\u2014\s+.+?" + _re.escape(title_key) + r".+?\n)",
+                _re.IGNORECASE,
+            )
+            m = header_pattern.search(primer_md)
+            if m and link_info["url"] not in primer_md:
+                link_html = '<a href="' + link_info["url"] + '" target="_blank" rel="noopener">' + _PDF_ICON + " " + link_info["label"] + "</a>"
+                link_line = "\n" + link_html + "\n"
+                primer_md = header_pattern.sub(lambda m, ll=link_line: m.group(1) + ll, primer_md)
 
     primer_html = markdown_to_html(primer_md)
 
@@ -2708,6 +3130,28 @@ def _parse_followups(lines):
     return followups
 
 
+def build_ai_news():
+    """Build AI news feed from curated articles in ai_news/ directory."""
+    ai_dir = DATA_DIR / "ai_news"
+    if not ai_dir.exists():
+        return {"articles": [], "dates": []}
+    files = sorted(ai_dir.glob("*_精选.json"), reverse=True)
+    dates = [f.stem.split("_")[0] for f in files]
+    all_articles = []
+    seen = set()
+    for f in files[:7]:
+        try:
+            articles = json.loads(f.read_text(encoding="utf-8"))
+            for a in articles:
+                key = a.get("url", a.get("title", ""))
+                if key and key not in seen:
+                    seen.add(key)
+                    all_articles.append(a)
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"articles": all_articles, "dates": dates, "latest_date": dates[0] if dates else None}
+
+
 HTML_PAGE = HTML_PAGE.replace("__CSS_VARS__", CSS_VARS).replace("{{", "{").replace("}}", "}")
 HTML_PAGE = HTML_PAGE.replace("__WB_STYLES__", MARKDOWN_RENDERER_STYLE)
 
@@ -2773,6 +3217,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_error(404, "MM primer not found")
                     return
                 self.respond_html(f"<html><head><meta charset='UTF-8'></head><body><pre>{esc(content)}</pre></body></html>")
+            elif path == "/api/ai-news":
+                self.respond_json(build_ai_news())
             else:
                 self.send_error(404, "Not found")
         except Exception as exc:

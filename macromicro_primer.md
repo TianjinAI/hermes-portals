@@ -1,7 +1,7 @@
 # MacroMicro YTD 2026 Newsletter Primer
 
-> **Compiled:** May 4, 2026  
-> **Source:** 10 MacroMicro newsletter emails (April 7–May 4, 2026) from bamboo.ocean Gmail account  
+> **Compiled:** May 11, 2026  
+> **Source:** 12 MacroMicro newsletter emails (April 7–May 11, 2026) from bamboo.ocean Gmail account  
 > **Note:** Newsletters tagged with "[PDF Download]" linked to full PDF reports hosted on Google Drive. This primer is based on the email body text; full PDF slide decks and chart packs were not directly extractable.
 
 ---
@@ -323,6 +323,7 @@
 **Charts/data referenced:** WTI crude, 10Y Treasury yields, SOX index performance, US Dollar Index, gold prices, AI tool traffic data, OpenRouter token usage, Taiwan export data, TSMC revenue guidance.
 
 ---
+
 ### #10 — May 4, 2026 | 🎰 Mach Speed Magnificence [PDF Download]
 
 **Type:** WEFC (Weekly Economic and Financial Commentary)
@@ -343,85 +344,141 @@
 
 ---
 
+### #11 — May 8, 2026 | 🤺 The AI Race No Longer Zero-Sum: Intensifying Competition Extends the Infrastructure Supercycle
 
-## 3. Recurring Themes Across All 10 Newsletters
+**Type:** Thematic deep-dive / research report (MacroMicro Research)
 
-### A. The US-Israel-Iran Conflict as the Dominant Geopolitical Overlay (10 of 10 newsletters)
+**Key Topics:**
 
-- **Escalation arc:** Ceasefire deadline (Apr 7) → temporary ceasefire (Apr 9) → Islamabad talks collapse → naval blockade → ongoing Hormuz disruptions → no breakthrough (May 4) → market desensitization.
-- **MM's consistent framing:** This is a contained energy shock, not a 1970s-style structural inflation crisis.
-- **Trump's "bottom line" theory:** Two red lines (Treasury yields ~4.5%, oil >$100–110) constrain his escalation envelope.
-- **Market response:** Initial panic → gradual desensitization as fundamentals reassert. Brent above $100 remains key threshold for global policy decisions (June).
+1. **Anthropic Surpassing OpenAI in Estimated ARR — Competition Expands the Pie:** Reports of OpenAI missing internal revenue targets briefly reignited AI cycle sustainability concerns. But Anthropic's annualized recurring revenue may now surpass OpenAI's on a gross accounting basis, with some estimates exceeding $40B. Rather than signaling market contraction, intensifying LLM competition mirrors the 1990s browser wars — Netscape's collapse didn't shrink the internet; it accelerated adoption. Similarly, shifting leadership among frontier AI labs drives broader ecosystem expansion, enterprise integration, and infrastructure investment. Market sentiment reversed after M7 Q1 earnings confirmed continued CapEx expansion.
 
-### B. AI as the Unshakeable Structural Megatrend (10 of 10 newsletters)
+2. **Hyperscaler Q1 Earnings Validate AI Revenue Thesis — Three Parallel Tracks:**
+   - **Revenue validation:** Google Cloud revenue surged +63% YoY (backlog nearly doubled to $462B), Amazon AWS AI services ARR exceeded $15B run-rate, Microsoft Azure grew 40% with AI ARR reaching $37B (+123% YoY, Copilot paid seats >20M). Meta gave no concrete AI-specific revenue figures — market reaction was comparatively muted.
+   - **Hardware self-sufficiency:** All four hyperscalers aggressively developing custom ASICs — Google TPU 8i (80% price-performance improvement, available to external customers for first time), Amazon Trainium (>$100B in committed orders), Meta MTIA (Broadcom partnership for recommendation systems), Microsoft Maya 200 (token-processing throughput). This is not zero-sum with NVIDIA but complementary.
+   - **Real-world AI agent deployment:** Google advancing "agentic commerce" (autonomous checkout flows), Amazon Rufus engagement surging, Meta Muse Spark driving tens of millions of AI customer service conversations, Microsoft Copilot evolving into a long-horizon collaborative multi-step worker.
+
+3. **AI Monetization Coverage Ratio — A New Framework for CapEx Sustainability:** MM introduces a novel metric comparing expected future AI revenue against current AI CapEx. Current ratios: Meta 1.8, Microsoft 1.5, Google 1.1, Amazon 0.7 — all considered healthy for an industry in early stages of the AI Agent explosion. Microsoft holds $627B in commercial RPO ($156.8B to be recognized in 2026, $470.2B in 2027). Combined hyperscaler AI CapEx for 2025-2026 exceeds $700B. The framework suggests 2026–2027 may represent an inflection point where AI revenue scales faster than infrastructure expenditure growth — transitioning from "spend first, monetize later" to "commit first, deploy later."
+
+4. **Neoclouds Face Structural Risk but GPU Rental Rates Surging:** CoreWeave, Oracle, Nebius, and Applied Digital suffer from negative FCF and higher cost of capital vs. traditional CSPs, making them vulnerable to any demand softening. However, H100 GPU rental rates surged from $1.70/hr (October 2025) to $2.35/hr (March 2026) — a +40% increase driven by agentic workflows and video generation demand. All new capacity scheduled through August/September 2026 is completely sold out. Some H100 contracts extended to four-year terms lasting until 2028.
+
+5. **GPUs and ASICs — A Complementary Expansion Cycle, Not Zero-Sum:** Detailed framework:
+   - **GPUs:** Flexible general-purpose computing, mature CUDA ecosystem, ideal for training and rapid iteration. Commodity pricing tied to supply/demand cycles.
+   - **ASICs:** Specialized hardware for specific algorithms, extreme efficiency and low power, ideal for scaled inference. "Self-developed, self-use" model by CSPs, connected to internal CapEx.
+   - CSPs use mixed deployments to maximize utility. NVIDIA's largest clients remain the four CSPs. Zero-sum competition would only emerge if AI model advancement stalls entirely and the market ceiling is reached.
+
+6. **Inventory Metrics as AI Cycle Tracking Framework:** The current cycle fundamentally differs from 2020-2021 over-expansion — the manufacturing cycle hadn't fully bottomed before AI demand pulled it back up. Two tracking approaches:
+   - **GPU clusters (NVIDIA, AMD):** Monitor Days Sales of Inventory (DSI). Slight elevation reflects GB300 mass production and Vera Rubin stocking. Expect finished goods to decline once server shipments scale, confirming robust AI demand.
+   - **ASIC clusters (IC design firms):** Monitor WIP inventory. DSI declining or low — previously produced products shipping rapidly, while surging WIP signals massive new CSP orders. Demonstrates hyperscaler confidence in ongoing AI compute expansion.
+
+**Charts/data referenced:** US frontier AI labs annualized revenue chart, Google Cloud revenue, AI infrastructure days inventory (DSI), semiconductor DSI by business, M7 CapEx chart, Neocloud RPO vs CapEx comparison, GPU H100 rental rate timeline, AI Monetization Coverage Ratio framework.
+
+---
+
+### #12 — May 11, 2026 | 📈 The Biggest Is Yet to Come [PDF Download]
+
+**Type:** WEFC (Weekly Economic and Financial Commentary)
+
+**Key Topics:**
+
+1. **Global Equities Extend Gains on Earnings & Geopolitical Déterte:** The S&P 500 hit a new high led by tech, while AI-driven hardware optimism pushed the SOX Index up over 11% and lifted Asian markets. Oil softened as US-Iran talks boosted risk-on sentiment. Gold held near US$4,700/oz. Focus now turns to the upcoming Trump-Xi meeting.
+
+2. **Q1 Earnings Force Investors to Reopen the AI Profit Debate:** With 84% of S&P 500 companies beating EPS estimates and average surprises reaching 18.2%, Q1 was far stronger than the market expected. Full-year 2026 EPS growth is still pegged at 21.0% despite oil, tariffs, and geopolitical stress. The larger question is whether AI is now lifting margins faster than analysts can model — potentially creating an upgrade cycle that the market has not yet priced.
+
+3. **LLM Battle Expands the Investment Pie Beyond Market Share:** OpenAI still leads consumer scale with roughly 900 million weekly active users, while Anthropic's reported $30 billion ARR highlights enterprise monetization potential. Rather than fighting for share in a fixed market, intensifying LLM competition is expanding the total addressable market. As agents drive higher token usage, investors may need to focus less on which chatbot wins and more on how competition lifts compute, cloud, and semiconductor demand.
+
+4. **April Payrolls Beat Keeps Fed Focused on Inflation:** April payrolls rose 115,000 — nearly double the 62,000 consensus — while unemployment held at 4.3% even as participation slipped to 61.8%. The key signal is that recent payroll gains remain in positive territory, easing fears of a sharper labor-market downturn. This shifts the Fed debate back to inflation, with the May 12 April CPI release now critical. The Cleveland Fed estimates headline CPI could reaccelerate to 3.6% (from 3.3%).
+
+5. **China's Gold Buying Keeps the De-Dollarization Trade Alive:** Gold's near-term path still depends on real rates, oil, and rate-cut expectations, but China's buying is the bigger strategic signal. The PBOC has extended its gold accumulation streak to 18 months, while global gold reserves are estimated near $4 trillion in market value. The key question is whether structural central-bank demand can overpower rate-driven pressure.
+
+**Charts/data referenced:** S&P 500 / SOX performance, earnings beat rates, EPS growth estimates, April payrolls data, Cleveland Fed CPI nowcast, gold prices, PBOC gold reserves, OpenAI and Anthropic user/ARR metrics.
+
+---
+
+## 3. Recurring Themes Across All 12 Newsletters
+
+### A. AI as the Unshakeable Structural Megatrend — Competition Expands the Pie (12 of 12 newsletters)
 
 - AI demand repeatedly described as "exceeding expectations," "structural," "accelerating."
-- **Agentic AI** identified as the next phase — driving exponential token consumption, compute demand, and hardware requirements.
+- **Agentic AI** identified as the next phase — tool calling, process control, multi-agent coordination driving exponential compute demand.
 - **Key metrics tracked:** Claude enterprise adoption (single digits → 30%), AI tool visits (6.7B → 8.6B monthly), OpenRouter token usage (3x since Jan), TSMC AI accelerator CAGR (50% → 56–59%).
-- **New evolution (May 4):** AI earnings moving from "future promise" to "present operating leverage" — M7 cloud revenue re-acceleration shows enterprise demand is real and current.
+- **May 8 thesis:** The AI race is no longer zero-sum — Anthropic surpassing OpenAI in estimated ARR demonstrates that competition expands the total addressable market rather than cannibalizing it. Historical analogy: 1990s browser wars.
+- **May 11 update:** OpenAI reported ~900M weekly active users, Anthropic ~$30B ARR. Competition continues expanding compute, cloud, and semiconductor demand across the board.
+- AI earnings moving from "future promise" to "present operating leverage" — M7 cloud revenue re-acceleration shows enterprise demand is real and current.
 
-### C. TSMC as the Bellwether (5 of 10 newsletters)
+### B. The US-Israel-Iran Conflict as a Dominant — But Fading — Geopolitical Overlay (11 of 12 newsletters)
+
+- **Escalation arc:** Ceasefire deadline (Apr 7) → temporary ceasefire (Apr 9) → Islamabad collapse → naval blockade → Hormuz disruptions → no breakthrough → market desensitization.
+- **MM's consistent framing:** A contained energy shock, not a 1970s-style structural crisis.
+- **Trump's "bottom line" theory:** Two red lines (Treasury yields ~4.5%, oil >$100–110) constrain escalation.
+- **Base case (Apr 30 CEO House View):** War concludes within 90–120 days. Brent above $100 remains key June threshold for global policy decisions.
+- By May 8, the conflict was entirely absent from the newsletter. **May 11:** Returns as a brief positive catalyst — oil softened on US-Iran talks progress, boosting risk-on sentiment — suggesting markets are now treating any progress as constructive rather than fearing escalation.
+
+### C. Hyperscaler AI Revenue Validation & Monetization Coverage (4 of 12 newsletters)
+
+- Q1 earnings season confirmed AI beginning to affect current revenue, margins, and business efficiency — not just long-duration CapEx.
+- Cloud re-acceleration clearest signal: AWS, Google Cloud, Azure all re-accelerated despite large revenue bases.
+- **AI Monetization Coverage Ratio (introduced May 8):** Meta 1.8, Microsoft 1.5, Google 1.1, Amazon 0.7 — all healthy for early-stage industry.
+- Combined hyperscaler 2025-2026 AI CapEx >$700B supported by $627B Microsoft commercial RPO and $462B Google Cloud backlog.
+- 2026–2027 projected as inflection point where AI revenue scales faster than infrastructure expenditure growth.
+- **May 11 adds:** OpenAI at ~900M WAUs and Anthropic at ~$30B ARR provide consumer and enterprise benchmarks for the AI monetization landscape.
+
+### D. TSMC as the AI Bellwether (5 of 12 newsletters)
 
 - TSMC's Q1 results, guidance upgrades, and unprecedented N3 capacity expansion treated as confirmation of the AI megatrend.
 - **"Breaking its own playbook"** — historically conservative TSMC actively expanding N3 capacity for the first time, capex at high end of $52–56B range.
+- N2 volume production started Q4 2025. CoWoS capacity "extremely tight."
 
-### D. Taiwan GDP/Exports as Real-Time AI Cycle Gauge (6 of 10 newsletters)
+### E. Taiwan GDP/Exports as Real-Time AI Cycle Gauge (6 of 12 newsletters)
 
 - Taiwan March exports $80.1B (+61.8% YoY), Q1 exports $195.7B (+51.1% YoY).
-- **May 4 update:** Taiwan Q1 GDP beat at 13.69% YoY (vs. 11.46% forecast) — not just local growth story, but signal that global AI infrastructure demand is still accelerating.
+- Taiwan Q1 GDP beat at 13.69% YoY (vs. 11.46% forecast) — not just local growth, but signal that global AI infrastructure demand is still accelerating.
 - MacroMicro raised Taiwan's 2026 GDP forecast to **8.6% from 5.2%**.
 - Exports surge (35.25% Q1) shows hyperscaler CAPEX continuing to flow through supply chain.
 
-### E. Inflation Analysis: Tariffs + AI + Oil = New Pricing Paradigm (4 of 10 newsletters)
-
-- MM consistently argues against runaway inflation fears.
-- Three inflation drivers identified: tariffs (one-time adjustments → fade), AI-driven demand (structural but benign), oil (contained short-term shock).
-- **Key anchors:** Shelter disinflation (40%+ of CPI), declining energy intensity of GDP, AI productivity gains eventually disinflationary.
-- **March CPI analysis:** Headline alarming (3.3%), but core constructive (2.6%), services decelerating.
-
-### F. Global Central Bank Policy Divergence (4 of 10 newsletters)
-
-- **Fed:** Held at 3.50%–3.75% with easing bias intact. Vote split (8-3-1) shows debate is timing, not renewed tightening. Kevin Warsh expected to take over after mid-May.
-- **ECB:** Held but discussed hike; Eurozone HICP at 3.0% (highest since Sep 2023).
-- **BoJ:** Held at 0.75% with 3 dissents for hike; 2026 core CPI forecast raised to 2.8%.
-- **Key threshold:** Brent above $100 may determine next global policy split in June.
-
-### G. "Multi-Point Recovery" in Semiconductors (5 of 10 newsletters)
+### F. Multi-Point Recovery in Semiconductors (5 of 12 newsletters)
 
 - AI demand spreading from GPUs/HBM → CPUs, PMICs, cooling solutions, semiconductor equipment.
 - **Agentic AI specifically driving CPU demand:** Tool calling, process control, multi-agent coordination require high-performance CPUs (benefitting AMD, Intel).
 - Taiwan and Korea export records as validation.
+- **May 8 update:** GPUs and ASICs entering a complementary expansion cycle — both benefit from rising AI compute demand. Zero-sum only if AI model advancement stalls.
 
-### H. M7 Earnings & AI Operating Leverage (2 of 10 newsletters)
+### G. The Hyperscaler Custom ASIC Race (2 of 12 dedicated + recurring mentions)
 
-- Q1 earnings season strong: 84% EPS beat rate, 81% revenue beat, +15.1% blended EPS growth.
-- **May 4 insight:** M7 results showed AI beginning to affect current revenue growth, margins, and business efficiency — not just long-duration investment. Cloud re-acceleration (AWS, Google Cloud, Azure) clearest signal.
+- All four major hyperscalers developing proprietary chips: Google TPU 8i (80% price-performance improvement, now available externally), Amazon Trainium ($100B+ committed orders), Meta MTIA (Broadcom partnership), Microsoft Maya 200.
+- ASICs complement rather than cannibalize GPU demand — CSPs use mixed deployments, and NVIDIA remains their largest supplier.
+- ASIC cycle tracked via WIP inventory of IC design firms — currently surging on new CSP orders.
 
-### I. China Economic Dynamics (2 of 10 newsletters)
+### H. Inflation Analysis: Tariffs + AI + Oil = New Pricing Paradigm (5 of 12 newsletters)
 
-- Q1 GDP beat at 5.0%, driven by exports (especially high-tech).
-- PPI turned positive for first time in 41 months — easing deflation.
-- Recovery unbalanced: consumption weak, relying on exports and investment.
+- MM consistently argues against runaway inflation fears.
+- Three drivers: tariffs (one-time → fade), AI-driven demand (structural but benign), oil (contained short-term shock).
+- **Key anchors:** Shelter disinflation (40%+ of CPI), declining energy intensity of GDP, AI productivity gains eventually disinflationary.
+- March CPI: Headline 3.3%, core 2.6% — services decelerating. Constructive read.
+- **May 11 update:** April payrolls (+115K vs. 62K consensus) shifted Fed debate back to inflation. Cleveland Fed estimates April CPI headline could reaccelerate to 3.6% — a critical test for the benign inflation narrative.
 
-### J. US-China AI Tech Competition (1 dedicated newsletter + recurring mentions)
+### I. Global Central Bank Policy Divergence (5 of 12 newsletters)
 
-- Five-layer AI stack mapped: US dominates chips and frontier models; China dominates power grid, cost curve, Physical AI.
-- China's open-source model strategy (DeepSeek, Qwen, Doubao) gaining ground.
-- Competition evolving from single-point to ecosystem-level.
+- **Fed:** Held at 3.50%–3.75% with easing bias intact. Vote split (8-3-1) shows debate is timing, not tightening. Kevin Warsh expected after mid-May.
+- **ECB:** Held but discussed hike; Eurozone HICP at 3.0% (highest since Sep 2023).
+- **BoJ:** Held at 0.75% with 3 dissents for hike; 2026 core CPI forecast raised to 2.8%.
+- **Key threshold:** Brent above $100 may determine next global policy split in June.
+- **May 11:** Strong April payrolls + Cleveland Fed CPI reacceleration estimate reinforces the Fed's inflation focus.
 
 ---
-
 
 ## 4. Key Charts & Data Points
 
 | Metric | Value | Source Newsletter |
 |--------|-------|-------------------|
 | March Nonfarm Payrolls | +178,000 (vs. +60,000 consensus) | #1 (Apr 7) |
-| Unemployment Rate | 4.3% (labor force -396K) | #1 (Apr 7) |
+| April Nonfarm Payrolls | +115,000 (vs. +62,000 consensus) | #12 (May 11) |
+| Unemployment Rate | 4.3% | #1, #12 |
+| Labor Force Participation Rate | 61.8% (down from 61.9%) | #12 (May 11) |
 | Average Hourly Earnings YoY | 3.5% (multi-year low) | #1 (Apr 7) |
 | Manufacturing Cycle Index | Highest since 2021 | #1 (Apr 7) |
 | March CPI Headline YoY | 3.3% | #3 (Apr 13) |
 | March CPI Core YoY | 2.6% (beat consensus) | #3 (Apr 13) |
+| April CPI Cleveland Fed Estimate | 3.6% (from 3.3%) | #12 (May 11) |
 | Energy CPI MoM | +10.9% (highest since 2005) | #3 (Apr 13) |
 | ISM Prices Paid | 78.3 (highest since Jul 2022) | #2 (Apr 9) |
 | WTI Crude Range | $95–$110+ during April | #2, #3, #9 |
@@ -454,52 +511,80 @@
 | BoJ 2026 Core CPI Forecast | 2.8% | #10 (May 4) |
 | AI Tool Visits (March) | 8.6 billion (from 6.7B Feb) | #9 |
 | OpenRouter Token Usage | 3x vs. beginning of year | #9 |
-| S&P 500 Q1 Beat Rate | 84% EPS, 81% revenue (28% reported) | #8 |
+| S&P 500 Q1 EPS Beat Rate | 84% | #8, #12 |
+| S&P 500 Q1 Average EPS Surprise | 18.2% | #12 (May 11) |
+| Full-Year 2026 EPS Growth Estimate | 21.0% | #12 (May 11) |
 | S&P 500 Blended EPS Growth | +15.1% | #8 |
-| S&P 500 Weekly Gain | ~1% | #10 (May 4) |
+| S&P 500 New High | Reached May 11 | #12 (May 11) |
+| SOX April Performance | +31.6% | #9 |
+| SOX Weekly Performance | +11% (May 4-11) | #12 (May 11) |
 | NASDAQ Level | Above 25,000 | #10 (May 4) |
 | MM Fear & Greed Index | Extreme fear → extreme greed (<4 weeks) | #8 |
 | US Recession Probability | 16.1% | #8 |
-| SOX April Performance | +31.6% | #9 |
 | Claude Enterprise Adoption | Single digits → 30% in one year | #7 |
+| Combined Hyperscaler AI CapEx (2025–2026) | >$700B | #11 (May 8) |
+| Google Cloud Revenue Growth | +63% YoY | #11 |
+| Google Cloud Backlog | $462B | #11 |
+| Google AI CapEx (2025–2026) | $211B | #11 |
+| Amazon AI CapEx (2025–2026) | $248.8B | #11 |
+| Meta AI CapEx (2025–2026) | $154.1B | #11 |
+| Microsoft AI CapEx (2025–2026) | $136.5B | #11 |
+| Microsoft AI ARR | $37B (+123% YoY) | #11 |
+| Microsoft Commercial RPO | $627B | #11 |
+| AWS AI ARR Run-Rate | >$15B | #11 |
+| Copilot Paid Seats | >20M | #11 |
+| Azure Growth | +40% | #11 |
+| Amazon Trainium Committed Orders | >$100B | #11 |
+| Google TPU 8i Price-Performance | +80% improvement | #11 |
+| Anthropic Estimated ARR | >$40B (gross accounting basis) → ~$30B reported | #11, #12 |
+| OpenAI Weekly Active Users | ~900M | #12 (May 11) |
+| GPU H100 Rental Rate (Oct 2025) | $1.70/hr | #11 |
+| GPU H100 Rental Rate (Mar 2026) | $2.35/hr (+40%) | #11 |
+| AI Monetization Coverage Ratio (Meta) | 1.8x | #11 |
+| AI Monetization Coverage Ratio (Microsoft) | 1.5x | #11 |
+| AI Monetization Coverage Ratio (Google) | 1.1x | #11 |
+| AI Monetization Coverage Ratio (Amazon) | 0.7x | #11 |
+| Gold Price | ~$4,700/oz | #12 (May 11) |
+| PBOC Gold Accumulation | 18 consecutive months | #12 (May 11) |
+| Global Gold Reserves Market Value | ~$4T | #12 (May 11) |
 | US Energy Share of PCE | ~24% (from ~40% in 1970s) | #2 |
 | US Share of Global Oil Production | ~20% | #2 |
 | Energy Intensity of GDP Decline | ~40% since 2000 | #2 |
 
 ---
 
-
 ## 5. Recommended Follow-Up Topics
 
 Based on the themes and forward catalysts identified across these newsletters, the following areas merit continued monitoring:
 
-1. **Brent Oil Threshold ($100) & June Policy Decisions:** ECB discussed a hike; BoJ had 3 dissents for hike. If Brent stays above $100, the next global policy split may be triggered in June. Key threshold to watch.
+1. **April CPI Release (May 12) — Inflation Inflection Test:** The Cleveland Fed estimates headline CPI could reaccelerate to 3.6% (from 3.3%). This is the critical test for MM's benign inflation narrative. If CPI surprises upward, it could delay Fed easing and pressure risk assets. If it holds or declines, it validates the "contained energy shock" thesis.
 
-2. **Kevin Warsh Fed Chair Transition (post mid-May):** How will Warsh interpret the current inflation mix (transitional vs. structural)? His stance will determine whether the Fed can deliver easing while maintaining credibility.
+2. **Brent Oil Threshold ($100) & June Policy Decisions:** ECB discussed a hike; BoJ had 3 dissents for hike. If Brent stays above $100, the next global policy split may be triggered in June. Key threshold for central bank divergence.
 
-3. **Taiwan GDP/Exports as AI Cycle Leading Indicator:** Taiwan 2026 GDP forecast raised to 8.6% from 5.2%. Watch monthly export data for confirmation that hyperscaler CAPEX continues accelerating.
+3. **Kevin Warsh Fed Chair Transition (post mid-May):** How will Warsh interpret the current inflation mix (transitional vs. structural)? His stance will determine whether the Fed can deliver easing while maintaining credibility. April CPI will be his first major data point.
 
-4. **M7 Cloud Revenue Trajectory:** AWS, Google Cloud, Azure all re-accelerated in Q1. Monitor whether this trend continues into Q2 — validates AI demand moving from "promise" to "operating leverage."
+4. **AI Monetization Coverage Ratios Across Hyperscalers:** New MM framework tracking expected AI revenue vs. CapEx. Are ratios improving as AI revenue scales faster than infrastructure spend? Key indicator of whether the "spend first, monetize later" phase is truly transitioning.
 
-5. **US-Iran War Resolution Timeline:** MM's base case is 90–120 days (now ~70+ days elapsed). Key milestones: permanent ceasefire, Strait of Hormuz reopening, oil price normalization below $100. No breakthrough as of May 4.
+5. **Trump-Xi Summit:** Focus turning to US-China relations. Any outcome on tariffs, technology restrictions, or AI cooperation could materially reshape the macro outlook for semiconductors and trade flows.
 
-6. **TSMC N2 Ramp & Vera Rubin Mass Production (H2 2026):** Next phase of the AI chip cycle. GB300 currently shipping; Vera Rubin and ASIC chips (Amazon Trainium, Google TPU, Meta MTIA, Microsoft Maia, OpenAI) next.
+6. **China's Gold Buying & De-Dollarization Signal:** PBOC extended gold accumulation to 18 consecutive months. Monitor whether other central banks follow and whether this trend can overpower rate-driven pressure on gold prices. Structural central-bank demand could keep gold elevated regardless of Fed policy.
 
-7. **AI Supply Chain Structural Pricing:** Server DRAM (+93–98% ASP forecast), ABF substrates, thermal solutions — is this a durable repricing or an inventory cycle spike?
+7. **Hyperscaler Custom ASIC Development Timelines:** Google TPU 8i now externally available, Amazon Trainium with $100B+ committed orders, Meta MTIA, Microsoft Maya 200. Track production ramps and their impact on GPU demand — is the complementary thesis holding?
 
-8. **Physical AI Competition:** China's edge in autonomous driving (70%+ L2+ penetration) and humanoid robots vs. US software/infrastructure lead. Who scales faster?
+8. **Neocloud GPU Rental Rates as AI Demand Indicator:** H100 rates surged +40% (Oct 2025 → Mar 2026). Monitor whether rates sustain, especially as new capacity comes online. A reversal would signal demand softening before it shows up in IC design inventory.
 
-9. **China Domestic Demand:** Q1 GDP relied on exports — can policy support stabilize consumption and sustain 5% growth?
+9. **Taiwan GDP/Exports as AI Cycle Leading Indicator:** Taiwan 2026 GDP forecast raised to 8.6%. Watch monthly export data for confirmation that hyperscaler CAPEX continues accelerating. Q1 average ~$65B/month — is Q2 crossing $70B?
 
-10. **Semiconductor Cycle Transition:** MM's thesis that the cycle is "expanding before even ending" — from "divergent recovery" to "broad-based expansion." Monitor global semiconductor billings, equipment orders, memory prices, and Taiwan GDP for confirmation.
+10. **OpenAI vs Anthropic Competitive Dynamics — Consumer vs Enterprise AI Adoption:** OpenAI at ~900M weekly active users and Anthropic at ~$30B ARR represent two benchmarks for AI monetization. Monitor whether competition intensifies or decelerates the AI infrastructure supercycle — MM's thesis is that both expand the pie, but diverging trajectories (consumer scale vs. enterprise revenue) could signal where the next growth leg emerges.
+
+11. **GPU/ASIC Inventory Metrics as Cycle Indicators:** Watch DSI for NVIDIA/AMD (finished goods decline = server shipments scaling) and WIP inventory of IC design firms (surge = sustained CSP orders). These provide early cycle signals before earnings confirmations.
 
 ---
-
 
 ## Appendix: PDF Content Limitation
 
-Seven of the nine newsletters (IDs: 23228, 23344, 23438, 23484, 23503, 23619, 23685) were tagged with "[PDF Download]" referencing full reports on Google Drive. This primer is based exclusively on the email body text — the complete chart packs (20+ pages each for WEFC editions), full slide decks, and exclusive subscriber reports were not directly extractable. For deeper analysis of any individual topic, the original PDFs should be accessed via their Google Drive links embedded in each email.
+Nine of the twelve newsletters (IDs: 23228, 23344, 23438, 23484, 23503, 23619, 23685, 23755, 23888) were tagged with "[PDF Download]" referencing full reports on Google Drive. This primer is based exclusively on the email body text — the complete chart packs (20+ pages each for WEFC editions), full slide decks, and exclusive subscriber reports were not directly extractable. For deeper analysis of any individual topic, the original PDFs should be accessed via their Google Drive links embedded in each email.
 
 ---
 
-*Primer compiled from MacroMicro newsletter emails spanning April 7–30, 2026. All data points and claims attributed to MacroMicro research team. Not investment advice — see MacroMicro's full disclaimer in original emails.*
+*Primer compiled from MacroMicro newsletter emails spanning April 7–May 11, 2026. All data points and claims attributed to MacroMicro research team. Not investment advice — see MacroMicro's full disclaimer in original emails.*
