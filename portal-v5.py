@@ -1339,6 +1339,7 @@ let availableDates = [];
 let currentDate = null;
 let currentView = 'brief';
 let selectedHeadline = null;  // index into headlines[] from Brief tab
+let selectedArticle = null;   // direct article index for Brief→Full click-through
 const cache = Object.create(null);
 
 function selectHeadline(index) {
@@ -1346,39 +1347,13 @@ function selectHeadline(index) {
   setView('full');
 }
 
-/* selectArticle: click a synthesized article on Brief tab → find matching headline → go to Full */
+/* selectArticle: click a Brief card → jump to Full showing the article directly */
 var _briefArticlesCache = [];
 function selectArticle(articleIndex) {
   if (articleIndex >= _briefArticlesCache.length) return;
-  var article = _briefArticlesCache[articleIndex];
-  if (!article) return;
-  /* Try to find matching headline by fuzzy title match */
-  var bestIdx = -1;
-  var bestScore = 0;
-  getDateData(currentDate).then(function(data) {
-    var brief = data.brief_parsed || { headlines: [] };
-    var hds = brief.headlines || [];
-    for (var hi = 0; hi < hds.length; hi++) {
-      var ht = (hds[hi].title || '').toLowerCase();
-      var at = (article.title || '').toLowerCase();
-      /* Simple word overlap scoring */
-      var hWords = ht.split(/\s+/);
-      var aWords = at.split(/\s+/);
-      var overlap = 0;
-      for (var wi = 0; wi < aWords.length; wi++) {
-        if (ht.indexOf(aWords[wi]) !== -1) overlap++;
-      }
-      var score = overlap / Math.max(hWords.length, aWords.length);
-      if (score > bestScore) { bestScore = score; bestIdx = hi; }
-    }
-    if (bestIdx >= 0 && bestScore > 0.4) {
-      selectedHeadline = bestIdx;
-    } else {
-      /* No match — show article inline via alert fallback */
-      selectedHeadline = null;
-    }
-    setView('full');
-  });
+  selectedArticle = articleIndex;
+  selectedHeadline = null;
+  setView('full');
 }
 
 /* Auto-refresh Brief tab every 5 minutes */
@@ -1860,6 +1835,23 @@ async function renderBrief() {
     return Math.floor(diff / 86400) + 'd ago';
   }
   const newsletterCount = (data.newsletters || []).length;
+  /* Build newsletter subject→type map for label display */
+  var nlMap = {};
+  if (data.newsletters) {
+    for (var ni = 0; ni < data.newsletters.length; ni++) {
+      nlMap[data.newsletters[ni].subject] = data.newsletters[ni].newsletter_type || data.newsletters[ni].subject;
+    }
+  }
+  /* Get unique newsletter type names from an article's sources */
+  function articleNlTypes(article) {
+    var seen = {}, types = [];
+    var srcs = article.sources || [];
+    for (var si = 0; si < srcs.length; si++) {
+      var nt = nlMap[srcs[si].newsletter] || srcs[si].newsletter;
+      if (!seen[nt]) { seen[nt] = true; types.push(nt); }
+    }
+    return types;
+  }
   let breakingHeroHtml = '';
   let headlineFeedHtml = '';
   if (articles.length > 0) {
@@ -1868,18 +1860,18 @@ async function renderBrief() {
     var topCards = '';
     for (var ti = 0; ti < topN; ti++) {
       var a = articles[ti];
-      var t = (a.tags && a.tags[0]) || 'NEWS';
+      var ntypes = articleNlTypes(a);
+      var nlChips = ntypes.slice(0, 4).map(function(nt) { return '<span class="src-chip">' + esc(nt) + '</span>'; }).join(' ');
       var prev = stripMd(a.article, 160);
-      var srcs = (a.sources || []).slice(0, 3).map(function(s) { return '<span class="src-chip">' + esc(s.newsletter) + '</span>'; }).join('');
       var link = (a.links && a.links[0]) || '';
       var linkHtml = link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener" class="bc-link" onclick="event.stopPropagation()">\u2197</a>' : '';
       var badge = ti === 0 ? '<span class="chip" style="background:var(--accent-primary-bg);color:var(--accent-primary)">\u26A1 TOP</span>' : '<span class="chip">#' + (ti + 1) + '</span>';
       topCards += '<div class="breaking-card" onclick="selectArticle(' + ti + ')">' +
         '<div class="bc-meta">' + badge + '<span class="chip">' + esc(currentDate) + '</span></div>' +
-        '<div class="bc-tag" style="background:' + tagBg(t) + ';color:' + tagColor(t) + '">' + esc(t) + '</div>' +
+        '<div class="bc-footer" style="border-top:none;padding-top:0;margin-bottom:4px"><div class="bc-sources">' + nlChips + '</div></div>' +
         '<div class="bc-title">' + esc(a.title) + '</div>' +
         '<div class="bc-preview">' + esc(prev) + '</div>' +
-        '<div class="bc-footer"><div class="bc-sources">' + srcs + '</div>' + linkHtml + '</div>' +
+        '<div class="bc-footer"><div class="bc-sources">' + nlChips + '</div>' + linkHtml + '</div>' +
         '</div>';
     }
     breakingHeroHtml = '<div class="breaking-top">' + topCards + '</div>';
@@ -1887,17 +1879,17 @@ async function renderBrief() {
     var feedCards = '';
     for (var fi = topN; fi < articles.length; fi++) {
       var a = articles[fi];
-      var t = (a.tags && a.tags[0]) || 'NEWS';
+      var ntypes = articleNlTypes(a);
+      var nlChips = ntypes.slice(0, 3).map(function(nt) { return '<span class="src-chip" style="display:inline-block;font-size:9px">' + esc(nt) + '</span>'; }).join(' ');
       var prev = stripMd(a.article, 100);
       var srcCount = (a.sources || []).length;
       var linkCount = (a.links || []).length;
       var firstLink = (a.links && a.links[0]) || '';
       var linkHtml = firstLink ? '<a href="' + esc(firstLink) + '" target="_blank" rel="noopener" class="hl-links" onclick="event.stopPropagation()">\u2197</a>' : '';
       feedCards += '<div class="headline-card" onclick="selectArticle(' + fi + ')">' +
-        '<div><div class="hl-tag" style="background:' + tagBg(t) + ';color:' + tagColor(t) + '">' + esc(t) + '</div>' +
-        '<div class="hl-title">' + esc(a.title) + '</div>' +
+        '<div><div class="hl-title">' + esc(a.title) + '</div>' +
         '<div class="hl-preview">' + esc(prev) + '</div></div>' +
-        '<div class="hl-meta"><div class="hl-sources">' + srcCount + ' src \u00b7 ' + linkCount + ' links</div>' +
+        '<div class="hl-meta"><div class="hl-sources">' + nlChips + '</div>' +
         linkHtml + '</div></div>';
     }
     headlineFeedHtml = feedCards ? '<div class="section-header"><div class="section-icon" style="background:var(--red-bg);color:var(--red)">•</div><div class="section-title">All Headlines</div><div class="section-count">' + (articles.length - topN) + ' more</div></div><div class="headline-feed">' + feedCards + '</div>' : '';
@@ -1945,6 +1937,82 @@ async function renderFull() {
   const newsletters = data.newsletters || [];
   const articlesData = data.articles || null;
   const articles = articlesData ? articlesData.articles || [] : [];
+
+  // ---- Direct article view (from Brief card click) ----
+  if (selectedArticle !== null && selectedArticle >= 0 && selectedArticle < articles.length) {
+    var art = articles[selectedArticle];
+    var selArtIdx = selectedArticle;
+    selectedArticle = null;
+
+    // Build newsletter subject→type map
+    var nlMap2 = {};
+    if (data.newsletters) {
+      for (var ni = 0; ni < data.newsletters.length; ni++) {
+        nlMap2[data.newsletters[ni].subject] = data.newsletters[ni].newsletter_type || data.newsletters[ni].subject;
+      }
+    }
+
+    // Newsletter chips from sources
+    var seenTypes = {};
+    var typeNames = [];
+    var srcList = art.sources || [];
+    for (var si = 0; si < srcList.length; si++) {
+      var nt = nlMap2[srcList[si].newsletter] || srcList[si].newsletter;
+      if (!seenTypes[nt]) { seenTypes[nt] = true; typeNames.push(nt); }
+    }
+    var typeChips = typeNames.map(function(nt) {
+      return '<span class="src-chip">' + esc(nt) + '</span>';
+    }).join(' ');
+
+    var artBackLink = '<div style="margin-bottom:16px"><a href="javascript:switchView(&quot;brief&quot;)" style="color:var(--accent);text-decoration:none;font-size:13px">\u2190 Back to Brief</a></div>';
+
+    var articleHtml = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px">';
+    articleHtml += '<div class="full-article-title" style="font-size:18px;margin-bottom:12px">' + esc(art.title) + '</div>';
+    if (art.article) {
+      articleHtml += '<div style="font-size:14px;color:var(--text);line-height:1.9">';
+      articleHtml += renderMarkdown(art.article);
+      articleHtml += '</div>';
+    }
+    // Source attribution as newsletter chips
+    if (typeChips) {
+      articleHtml += '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">';
+      articleHtml += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Sources: ' + typeChips + '</div>';
+      articleHtml += '</div>';
+    }
+    // Bloomberg links
+    if (art.links && art.links.length > 0) {
+      articleHtml += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
+      articleHtml += '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Bloomberg Article Links (' + art.links.length + ')</div>';
+      articleHtml += '<div style="font-size:11px">';
+      for (var li = 0; li < art.links.length; li++) {
+        var linkUrl = art.links[li];
+        var displayUrl = linkUrl;
+        var qmark = displayUrl.indexOf('?');
+        if (qmark > -1) displayUrl = displayUrl.substring(0, qmark);
+        if (displayUrl.length > 80) displayUrl = displayUrl.substring(0, 80) + '...';
+        articleHtml += '<a href="' + esc(linkUrl) + '" target="_blank" style="color:var(--accent);text-decoration:none;display:block;margin-bottom:4px">[' + (li + 1) + '] ' + esc(displayUrl) + '</a>';
+      }
+      articleHtml += '</div></div>';
+    }
+    articleHtml += '</div>';
+
+    // Other articles as sidebar
+    var otherArtHtml = '';
+    for (var oi = 0; oi < articles.length; oi++) {
+      if (oi !== selArtIdx) {
+        otherArtHtml += '<div class="sidebar-stat" style="cursor:pointer;border-left:2px solid var(--accent);padding-left:10px;margin-bottom:4px" onclick="selectArticle(' + oi + ')">' +
+          '<span style="font-size:12px;color:var(--text-secondary)">' + esc(articles[oi].title).substring(0, 80) + (articles[oi].title.length > 80 ? '\u2026' : '') + '</span></div>';
+      }
+    }
+    var otherSection = otherArtHtml ? '<div class="section-header" style="margin-top:22px"><div class="section-icon" style="background:var(--text-muted);color:var(--text-muted)">\\ud83d\\udccb</div><div class="section-title">Other Articles</div><div class="section-count">' + (articles.length - 1) + ' more</div></div><div class="sidebar-card">' + otherArtHtml + '</div>' : '';
+
+    document.getElementById('content').innerHTML =
+      artBackLink +
+      '<div class="section-header" style="margin-top:8px"><div class="section-icon" style="background:var(--blue-bg);color:var(--blue)">\\ud83d\\udcf0</div><div class="section-title">Synthesized Article</div><div class="section-count">' + typeNames.length + ' sources</div></div>' +
+      articleHtml +
+      otherSection;
+    return;
+  }
 
   // ---- If no headline selected, show prompt ----
   if (selectedHeadline === null || selectedHeadline >= headlines.length) {
