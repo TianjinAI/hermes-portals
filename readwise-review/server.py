@@ -78,7 +78,12 @@ def filter_items(items):
         category = item.get('category', '')
         
         # Keep all YouTube items if configured
-        if keep_all_youtube and category in ['youtube', 'video']:
+        is_youtube = (
+            category in ['youtube', 'video'] or
+            item.get('folder', '') == 'YouTube' or
+            'youtube' in item.get('url', '').lower()
+        )
+        if keep_all_youtube and is_youtube:
             filtered.append(item)
             continue
         
