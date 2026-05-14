@@ -2485,27 +2485,65 @@ async function renderMM() {
 
   newsletters.forEach(function(nl, i) {
     var date = fmtDate(nl.date);
-    var excerpt = stripHtml(nl.body || nl.excerpt || '').substring(0, 500);
-    var links = findLinks(nl.body || '');
-    var linksHtml = '';
-    if (links.length) {
-      linksHtml = '<div style="margin-top:8px">';
-      links.forEach(function(url) {
-        var label = url.includes('drive.google') ? '📄 PDF Report' : (url.includes('macromicro') ? '🔗 View on MacroMicro' : '🔗 Link');
-        linksHtml += '<a href="' + esc(url) + '" target="_blank" rel="noopener" style="display:inline-block;margin-right:8px;font-size:11px;color:var(--blue);text-decoration:none;background:var(--blue-bg);padding:2px 8px;border-radius:4px">' + label + '</a>';
+    // Structured fields from parsed email
+    var ntype = nl.type || 'Newsletter';
+    var brief = nl.brief || '';
+    var keyPoints = nl.key_points || [];
+    var dataPoints = nl.data_points || [];
+    var pdfLink = nl.pdf_link || '';
+    var bodyHtml = nl.body_html || '';
+
+    // Type badge color
+    var typeColors = {
+      'WEFC': 'background:rgba(14,203,129,0.12);color:#0ECB81',
+      'CEO House View': 'background:rgba(168,85,247,0.12);color:#A855F7',
+      'Research Report': 'background:rgba(249,115,22,0.12);color:#F97316',
+      'Flash': 'background:rgba(239,68,68,0.12);color:#EF4444',
+      'Q&A / Flash': 'background:rgba(245,158,11,0.12);color:#F59E0B',
+      'Analysis': 'background:rgba(59,130,246,0.12);color:#3B82F6',
+    };
+    var typeStyle = typeColors[ntype] || 'background:rgba(100,100,100,0.12);color:#888';
+
+    html += '<div class="card" style="margin-bottom:16px;padding:18px">';
+    // Header row: type badge + date + subject
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">';
+    html += '<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;' + esc(typeStyle) + '">' + esc(ntype) + '</span>';
+    html += '<span style="font-size:11px;color:var(--text-muted)">' + (date ? '📅 ' + esc(date) : '') + '</span>';
+    html += '</div>';
+    html += '<div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:8px">' + esc(nl.subject || '(No subject)') + '</div>';
+
+    // Brief summary
+    if (brief) {
+      html += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;font-style:italic;border-left:3px solid var(--blue);padding-left:10px">' + esc(brief) + '</div>';
+    }
+
+    // Key points
+    if (keyPoints.length) {
+      html += '<div style="margin-bottom:12px">';
+      html += '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Key Points</div>';
+      html += '<ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.7">';
+      keyPoints.forEach(function(kp) {
+        html += '<li>' + esc(kp) + '</li>';
       });
-      linksHtml += '</div>';
+      html += '</ul></div>';
     }
-    html += '<div class="card" style="margin-bottom:12px;padding:16px">';
-    html += '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">';
-    html += '<div style="flex:1;min-width:0">';
-    html += '<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:4px">' + esc(nl.subject || '(No subject)') + '</div>';
-    html += '<div style="font-size:11px;color:var(--text-muted)">' + (date ? '<span style="margin-right:8px">📅 ' + date + '</span>' : '') + '<span>📧 bamboo.ocean</span></div>';
-    html += '</div></div>';
-    if (excerpt) {
-      html += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-top:8px">' + esc(excerpt) + (excerpt.length >= 500 ? '…' : '') + '</div>';
+
+    // Data points
+    if (dataPoints.length) {
+      html += '<div style="margin-bottom:12px">';
+      html += '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Data Points</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+      dataPoints.slice(0, 8).forEach(function(dp) {
+        html += '<span style="font-size:11px;background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:6px;font-family:monospace">' + esc(dp) + '</span>';
+      });
+      html += '</div></div>';
     }
-    html += linksHtml;
+
+    // PDF link
+    if (pdfLink) {
+      html += '<div style="margin-top:10px"><a href="' + esc(pdfLink) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#fff;background:var(--blue);padding:5px 12px;border-radius:6px;text-decoration:none;font-weight:600">📄 Download Full Report (PDF)</a></div>';
+    }
+
     html += '</div>';
   });
 
@@ -3193,8 +3231,118 @@ def _clean_email_body(body: str) -> str:
     return body.strip()
 
 
+def _parse_mm_email_into_summary(body: str, subject: str) -> dict:
+    """Parse a MacroMicro email body into structured summary fields.
+    Returns: {type, brief, key_points, data_points, pdf_link, body_html}
+    """
+    import re
+    if not body:
+        return {"type": "Newsletter", "brief": "", "key_points": [], "data_points": [], "pdf_link": "", "body_html": ""}
+    
+    # ── 1. Strip email headers ─────────────────────────────────────────────
+    text = re.sub(r"<#part[^>]*>\s*", "", body)
+    text = re.sub(r"^(From|To|Subject|Date|Sent|Reply-To):.*\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\r?\n{3,}", "\n\n", text).strip()
+    
+    # ── 2. Detect type from subject ────────────────────────────────────────
+    sl = subject.lower()
+    if "ceo house view" in sl:
+        ntype = "CEO House View"
+    elif "wefc" in sl:
+        ntype = "WEFC"
+    elif "flash" in sl:
+        ntype = "Flash"
+    elif "q&a" in sl or "question" in sl:
+        ntype = "Q&A / Flash"
+    elif "pdf" in sl:
+        ntype = "Research Report"
+    else:
+        ntype = "Analysis"
+    
+    # ── 3. Extract PDF link ──────────────────────────────────────────────
+    # Try Google Drive PDF first, then MacroMicro article URL as fallback
+    pdf_match = re.search(r"https://drive\.google\.com/file/d/[^&\s]+", body.replace("\r", ""))
+    if not pdf_match:
+        # Try MacroMicro collection/topic URLs (the full research article)
+        pdf_match = re.search(r"https://en\.macromicro\.me/collections/[^)\s\"']+", body.replace("\r", ""))
+    pdf_link = (pdf_match.group(0) + "?utm_source=mm_portal") if pdf_match else ""
+    
+    # ── 4. Build brief (first 1-2 sentences after the header block) ──────────
+    # Skip leading URL + date noise (e.g. "https://... April 17, 2026")
+    text_for_brief = re.sub(r"^\s*\(https?://[^\)]+\)\s*[\d ,]+\w+[\d ,]+(?:\d{4})?\s*", "", text)
+    text_for_brief = re.sub(r"^What You Should Know\s*", "", text_for_brief, flags=re.IGNORECASE)
+    sents = re.split(r'(?<=[.!?])\s+', text_for_brief)
+    brief = sents[0] or ""
+    if len(brief) < 40 and len(sents) > 1:
+        brief = sents[0] + " " + sents[1]
+    brief = re.sub(r"\s+", " ", brief).strip()[:400]
+    
+    # ── 5. Extract key sections (Roman numeral sections or "Key Focus") ───
+    key_points = []
+    # Try Key Focus section first
+    kf = re.search(r"Key Focus[^.!?]{0,5}([^.!?]{100,800})", text, re.DOTALL)
+    if kf:
+        items = re.split(r'(?<=[.!?])\s+(?=[A-Z])', kf.group(1))
+        for item in items[:5]:
+            item = item.strip()
+            if len(item) > 40:
+                key_points.append(re.sub(r"\s+", " ", item)[:300])
+    else:
+        # Fall back to splitting by Roman numeral sections
+        sections = re.split(r'\n\n+', text)
+        for sec in sections:
+            sec = sec.strip()
+            # Only take sections that start with Roman numeral or Key/Brief/etc. heading
+            if (len(sec) > 80 and
+                (re.match(r'^[IVXL]+\.[ \t]', sec) or
+                 re.match(r'^Key\s', sec, re.IGNORECASE) or
+                 re.match(r'^Brief\s', sec, re.IGNORECASE) or
+                 re.match(r'^MM\s', sec)) and
+                not re.match(r'^\s*\(?https?://', sec)):
+                key_points.append(sec[:300])
+    
+    # ── 6. Extract data points (numbers + context) ─────────────────────────
+    data_points = []
+    dp_patterns = [
+        r"\$[\d,]+(?:\.\d+)?\s*(?:billion|million|trillion|B|M|T|%)?",
+        r"\d[\d,]*\.?\d*(?:\.\d+)?\s*(?:%|percent|billion|million|year-over-year|YoY|quarter|q[1-4])",
+        r"S&P\s*(?:500)?\s*[\d,]+(?:\.\d+)?\s*(?:points?)?",
+        r"[\d,]+(?:\.\d+)?\s*(?:points?|%)",
+    ]
+    for pat in dp_patterns:
+        for m in re.findall(pat, text):
+            clean = re.sub(r"\s+", " ", m).strip()
+            if 10 < len(clean) < 150:
+                data_points.append(clean)
+    data_points = list(dict.fromkeys(data_points))[:15]
+    
+    # ── 7. Build body_html ───────────────────────────────────────────────
+    body_html = ""
+    if brief:
+        body_html += f'<p class="mm-brief">{brief}</p>'
+    if key_points:
+        body_html += '<div class="mm-section"><h4>Key Points</h4><ul>'
+        for kp in key_points:
+            body_html += f'<li>{kp}</li>'
+        body_html += '</ul></div>'
+    if pdf_link:
+        body_html += f'<div class="mm-pdf"><a href="{pdf_link}" target="_blank" rel="noopener">📄 Download Full Report (PDF)</a></div>'
+    
+    return {
+        "type": ntype,
+        "brief": brief,
+        "key_points": key_points,
+        "data_points": data_points,
+        "pdf_link": pdf_link,
+        "body_html": body_html,
+    }
+
+
 def build_mm_newsletters():
-    """Fetch MacroMicro newsletters from the email DB, fetching bodies on demand."""
+    """Fetch real MacroMicro newsletters from email DB, parse into structured summaries."""
     db_path = Path("/home/admin/.hermes/email-monitor/emails.db")
     if not db_path.exists():
         return {"newsletters": [], "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"}
@@ -3213,34 +3361,46 @@ def build_mm_newsletters():
     conn.close()
 
     newsletters = []
+    seen_subjects = set()
+
     for row in rows:
         email_id = row["email_id"]
-        account = row["account"]
-        subject = row["subject"]
-        date = row["date"]
-        body = row["body"] or ""
+        account  = row["account"]
+        subject  = row["subject"]
+        date     = row["date"]
+        body     = row["body"] or ""
 
-        # Fetch body on demand if empty
+        subj_key = (subject or "").lower().strip()
+        if not subj_key or subj_key in seen_subjects:
+            continue
+        seen_subjects.add(subj_key)
+
+        # On-demand body fetch if stored body is empty
         if not body.strip():
             body = _fetch_mm_email_body(account, email_id)
 
-        # Extract plain-text excerpt from HTML body
-        cleaned = _clean_email_body(body)
-        excerpt = cleaned[:500]
+        parsed = _parse_mm_email_into_summary(body, subject)
+        
+        # Fallback excerpt
+        if not parsed["brief"]:
+            text = re.sub(r"<[^>]+>", " ", body or "")
+            text = re.sub(r"[ \t]+", " ", text).strip()
+            parsed["brief"] = text[:400]
 
         newsletters.append({
-            "email_id": email_id,
-            "account": account,
-            "subject": subject,
-            "date": date,
-            "excerpt": excerpt,
-            "body": body,
+            "email_id":   email_id,
+            "account":    account,
+            "subject":    subject,
+            "type":       parsed["type"],
+            "date":       date,
+            "brief":      parsed["brief"],
+            "key_points": parsed["key_points"],
+            "data_points": parsed["data_points"],
+            "pdf_link":   parsed["pdf_link"],
+            "body_html":  parsed["body_html"],
         })
 
-    return {
-        "newsletters": newsletters,
-        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-    }
+    return {"newsletters": newsletters, "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"}
 
 
 def _parse_themes(lines):
