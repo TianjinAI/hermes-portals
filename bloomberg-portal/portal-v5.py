@@ -6,21 +6,19 @@ import os
 import re
 from collections import Counter, defaultdict
 from datetime import datetime
-from functools import cmp_to_key
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
 PORT = int(os.environ.get("PORT", "5055"))
-DATA_DIR = Path.home() / ".hermes" / "bloomberg_digest"
-AI_NEWS_DIR = DATA_DIR / "ai_news"
+DATA_DIR = Path("/home/admin/.hermes/bloomberg_digest")
 BRIEFS_DIR = DATA_DIR / "briefs"
 FULL_DIR = DATA_DIR / "full"
 SUMMARIES_DIR = DATA_DIR / "summaries"
 RAW_DIR = DATA_DIR / "raw"
 ARTICLES_DIR = DATA_DIR / "articles"
 KNOWLEDGE_BASE_PATH = DATA_DIR / "knowledge" / "knowledge_base.json"
-WORKBUDDY_DIR = Path.home() / ".hermes" / "workbuddy_reports"
+WORKBUDDY_DIR = Path("/home/admin/.hermes/workbuddy_reports")
 
 CSS_VARS = """
   :root {
@@ -1329,7 +1327,7 @@ __WB_STYLES__
         <button id="tabIntel" onclick="setView('intel')">Intel</button>
         <button id="tabDd" onclick="setView('dd')">DD</button>
         <button id="tabMm" onclick="setView('mm')">MM</button>
-        <button id="tabNews" onclick="setView('news')">AI News</button>
+        <button id="tabAi" onclick="setView('ai')">AI News</button>
       </div>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">&#9788;</button>
     </div>
@@ -1341,6 +1339,7 @@ let availableDates = [];
 let currentDate = null;
 let currentView = 'brief';
 let selectedHeadline = null;  // index into headlines[] from Brief tab
+let selectedArticle = null;   // direct article index for Brief→Full click-through
 const cache = Object.create(null);
 
 function selectHeadline(index) {
@@ -1348,39 +1347,13 @@ function selectHeadline(index) {
   setView('full');
 }
 
-/* selectArticle: click a synthesized article on Brief tab → find matching headline → go to Full */
+/* selectArticle: click a Brief card → jump to Full showing the article directly */
 var _briefArticlesCache = [];
 function selectArticle(articleIndex) {
   if (articleIndex >= _briefArticlesCache.length) return;
-  var article = _briefArticlesCache[articleIndex];
-  if (!article) return;
-  /* Try to find matching headline by fuzzy title match */
-  var bestIdx = -1;
-  var bestScore = 0;
-  getDateData(currentDate).then(function(data) {
-    var brief = data.brief_parsed || { headlines: [] };
-    var hds = brief.headlines || [];
-    for (var hi = 0; hi < hds.length; hi++) {
-      var ht = (hds[hi].title || '').toLowerCase();
-      var at = (article.title || '').toLowerCase();
-      /* Simple word overlap scoring */
-      var hWords = ht.split(/\s+/);
-      var aWords = at.split(/\s+/);
-      var overlap = 0;
-      for (var wi = 0; wi < aWords.length; wi++) {
-        if (ht.indexOf(aWords[wi]) !== -1) overlap++;
-      }
-      var score = overlap / Math.max(hWords.length, aWords.length);
-      if (score > bestScore) { bestScore = score; bestIdx = hi; }
-    }
-    if (bestIdx >= 0 && bestScore > 0.4) {
-      selectedHeadline = bestIdx;
-    } else {
-      /* No match — show article inline via alert fallback */
-      selectedHeadline = null;
-    }
-    setView('full');
-  });
+  selectedArticle = articleIndex;
+  selectedHeadline = null;
+  setView('full');
 }
 
 /* Auto-refresh Brief tab every 5 minutes */
@@ -1567,7 +1540,7 @@ function collectSourceExcerpts(newsletters, keywords) {
 }
 
 function setActiveTab() {
-  ['brief', 'full', 'intel', 'dd', 'mm', 'news'].forEach(view => {
+  ['brief', 'full', 'intel', 'dd', 'mm'].forEach(view => {
     document.getElementById('tab' + view.charAt(0).toUpperCase() + view.slice(1)).classList.toggle('active', currentView === view);
   });
 }
@@ -1630,7 +1603,7 @@ async function getDateData(dateStr) {
 async function render() {
   setActiveTab();
   document.getElementById('dateDisplay').textContent = currentDate || 'No dates';
-  if (!currentDate && currentView !== 'intel' && currentView !== 'dd' && currentView !== 'mm' && currentView !== 'news') {
+  if (!currentDate && currentView !== 'intel' && currentView !== 'dd' && currentView !== 'mm') {
     document.getElementById('content').innerHTML = '<div class="empty">No digest dates found.</div>';
     return;
   }
@@ -1639,7 +1612,7 @@ async function render() {
   if (currentView === 'intel') return renderIntel();
   if (currentView === 'dd') return renderDD();
   if (currentView === 'mm') return renderMM();
-  if (currentView === 'news') return renderNews();
+  if (currentView === 'ai') return renderAINews();
   return renderBrief();  // fallback
 }
 
@@ -1862,6 +1835,23 @@ async function renderBrief() {
     return Math.floor(diff / 86400) + 'd ago';
   }
   const newsletterCount = (data.newsletters || []).length;
+  /* Build newsletter subject→type map for label display */
+  var nlMap = {};
+  if (data.newsletters) {
+    for (var ni = 0; ni < data.newsletters.length; ni++) {
+      nlMap[data.newsletters[ni].subject] = data.newsletters[ni].newsletter_type || data.newsletters[ni].subject;
+    }
+  }
+  /* Get unique newsletter type names from an article's sources */
+  function articleNlTypes(article) {
+    var seen = {}, types = [];
+    var srcs = article.sources || [];
+    for (var si = 0; si < srcs.length; si++) {
+      var nt = nlMap[srcs[si].newsletter] || srcs[si].newsletter;
+      if (!seen[nt]) { seen[nt] = true; types.push(nt); }
+    }
+    return types;
+  }
   let breakingHeroHtml = '';
   let headlineFeedHtml = '';
   if (articles.length > 0) {
@@ -1870,18 +1860,18 @@ async function renderBrief() {
     var topCards = '';
     for (var ti = 0; ti < topN; ti++) {
       var a = articles[ti];
-      var t = (a.tags && a.tags[0]) || 'NEWS';
+      var ntypes = articleNlTypes(a);
+      var nlChips = ntypes.slice(0, 4).map(function(nt) { return '<span class="src-chip">' + esc(nt) + '</span>'; }).join(' ');
       var prev = stripMd(a.article, 160);
-      var srcs = (a.sources || []).slice(0, 3).map(function(s) { return '<span class="src-chip">' + esc(s.newsletter) + '</span>'; }).join('');
       var link = (a.links && a.links[0]) || '';
       var linkHtml = link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener" class="bc-link" onclick="event.stopPropagation()">\u2197</a>' : '';
       var badge = ti === 0 ? '<span class="chip" style="background:var(--accent-primary-bg);color:var(--accent-primary)">\u26A1 TOP</span>' : '<span class="chip">#' + (ti + 1) + '</span>';
       topCards += '<div class="breaking-card" onclick="selectArticle(' + ti + ')">' +
         '<div class="bc-meta">' + badge + '<span class="chip">' + esc(currentDate) + '</span></div>' +
-        '<div class="bc-tag" style="background:' + tagBg(t) + ';color:' + tagColor(t) + '">' + esc(t) + '</div>' +
+        '<div class="bc-footer" style="border-top:none;padding-top:0;margin-bottom:4px"><div class="bc-sources">' + nlChips + '</div></div>' +
         '<div class="bc-title">' + esc(a.title) + '</div>' +
         '<div class="bc-preview">' + esc(prev) + '</div>' +
-        '<div class="bc-footer"><div class="bc-sources">' + srcs + '</div>' + linkHtml + '</div>' +
+        '<div class="bc-footer"><div class="bc-sources">' + nlChips + '</div>' + linkHtml + '</div>' +
         '</div>';
     }
     breakingHeroHtml = '<div class="breaking-top">' + topCards + '</div>';
@@ -1889,17 +1879,17 @@ async function renderBrief() {
     var feedCards = '';
     for (var fi = topN; fi < articles.length; fi++) {
       var a = articles[fi];
-      var t = (a.tags && a.tags[0]) || 'NEWS';
+      var ntypes = articleNlTypes(a);
+      var nlChips = ntypes.slice(0, 3).map(function(nt) { return '<span class="src-chip" style="display:inline-block;font-size:9px">' + esc(nt) + '</span>'; }).join(' ');
       var prev = stripMd(a.article, 100);
       var srcCount = (a.sources || []).length;
       var linkCount = (a.links || []).length;
       var firstLink = (a.links && a.links[0]) || '';
       var linkHtml = firstLink ? '<a href="' + esc(firstLink) + '" target="_blank" rel="noopener" class="hl-links" onclick="event.stopPropagation()">\u2197</a>' : '';
       feedCards += '<div class="headline-card" onclick="selectArticle(' + fi + ')">' +
-        '<div><div class="hl-tag" style="background:' + tagBg(t) + ';color:' + tagColor(t) + '">' + esc(t) + '</div>' +
-        '<div class="hl-title">' + esc(a.title) + '</div>' +
+        '<div><div class="hl-title">' + esc(a.title) + '</div>' +
         '<div class="hl-preview">' + esc(prev) + '</div></div>' +
-        '<div class="hl-meta"><div class="hl-sources">' + srcCount + ' src \u00b7 ' + linkCount + ' links</div>' +
+        '<div class="hl-meta"><div class="hl-sources">' + nlChips + '</div>' +
         linkHtml + '</div></div>';
     }
     headlineFeedHtml = feedCards ? '<div class="section-header"><div class="section-icon" style="background:var(--red-bg);color:var(--red)">•</div><div class="section-title">All Headlines</div><div class="section-count">' + (articles.length - topN) + ' more</div></div><div class="headline-feed">' + feedCards + '</div>' : '';
@@ -1947,6 +1937,82 @@ async function renderFull() {
   const newsletters = data.newsletters || [];
   const articlesData = data.articles || null;
   const articles = articlesData ? articlesData.articles || [] : [];
+
+  // ---- Direct article view (from Brief card click) ----
+  if (selectedArticle !== null && selectedArticle >= 0 && selectedArticle < articles.length) {
+    var art = articles[selectedArticle];
+    var selArtIdx = selectedArticle;
+    selectedArticle = null;
+
+    // Build newsletter subject→type map
+    var nlMap2 = {};
+    if (data.newsletters) {
+      for (var ni = 0; ni < data.newsletters.length; ni++) {
+        nlMap2[data.newsletters[ni].subject] = data.newsletters[ni].newsletter_type || data.newsletters[ni].subject;
+      }
+    }
+
+    // Newsletter chips from sources
+    var seenTypes = {};
+    var typeNames = [];
+    var srcList = art.sources || [];
+    for (var si = 0; si < srcList.length; si++) {
+      var nt = nlMap2[srcList[si].newsletter] || srcList[si].newsletter;
+      if (!seenTypes[nt]) { seenTypes[nt] = true; typeNames.push(nt); }
+    }
+    var typeChips = typeNames.map(function(nt) {
+      return '<span class="src-chip">' + esc(nt) + '</span>';
+    }).join(' ');
+
+    var artBackLink = '<div style="margin-bottom:16px"><a href="javascript:switchView(&quot;brief&quot;)" style="color:var(--accent);text-decoration:none;font-size:13px">\u2190 Back to Brief</a></div>';
+
+    var articleHtml = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px">';
+    articleHtml += '<div class="full-article-title" style="font-size:18px;margin-bottom:12px">' + esc(art.title) + '</div>';
+    if (art.article) {
+      articleHtml += '<div style="font-size:14px;color:var(--text);line-height:1.9">';
+      articleHtml += renderMarkdown(art.article);
+      articleHtml += '</div>';
+    }
+    // Source attribution as newsletter chips
+    if (typeChips) {
+      articleHtml += '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">';
+      articleHtml += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Sources: ' + typeChips + '</div>';
+      articleHtml += '</div>';
+    }
+    // Bloomberg links
+    if (art.links && art.links.length > 0) {
+      articleHtml += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
+      articleHtml += '<div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Bloomberg Article Links (' + art.links.length + ')</div>';
+      articleHtml += '<div style="font-size:11px">';
+      for (var li = 0; li < art.links.length; li++) {
+        var linkUrl = art.links[li];
+        var displayUrl = linkUrl;
+        var qmark = displayUrl.indexOf('?');
+        if (qmark > -1) displayUrl = displayUrl.substring(0, qmark);
+        if (displayUrl.length > 80) displayUrl = displayUrl.substring(0, 80) + '...';
+        articleHtml += '<a href="' + esc(linkUrl) + '" target="_blank" style="color:var(--accent);text-decoration:none;display:block;margin-bottom:4px">[' + (li + 1) + '] ' + esc(displayUrl) + '</a>';
+      }
+      articleHtml += '</div></div>';
+    }
+    articleHtml += '</div>';
+
+    // Other articles as sidebar
+    var otherArtHtml = '';
+    for (var oi = 0; oi < articles.length; oi++) {
+      if (oi !== selArtIdx) {
+        otherArtHtml += '<div class="sidebar-stat" style="cursor:pointer;border-left:2px solid var(--accent);padding-left:10px;margin-bottom:4px" onclick="selectArticle(' + oi + ')">' +
+          '<span style="font-size:12px;color:var(--text-secondary)">' + esc(articles[oi].title).substring(0, 80) + (articles[oi].title.length > 80 ? '\u2026' : '') + '</span></div>';
+      }
+    }
+    var otherSection = otherArtHtml ? '<div class="section-header" style="margin-top:22px"><div class="section-icon" style="background:var(--text-muted);color:var(--text-muted)">\\ud83d\\udccb</div><div class="section-title">Other Articles</div><div class="section-count">' + (articles.length - 1) + ' more</div></div><div class="sidebar-card">' + otherArtHtml + '</div>' : '';
+
+    document.getElementById('content').innerHTML =
+      artBackLink +
+      '<div class="section-header" style="margin-top:8px"><div class="section-icon" style="background:var(--blue-bg);color:var(--blue)">\\ud83d\\udcf0</div><div class="section-title">Synthesized Article</div><div class="section-count">' + typeNames.length + ' sources</div></div>' +
+      articleHtml +
+      otherSection;
+    return;
+  }
 
   // ---- If no headline selected, show prompt ----
   if (selectedHeadline === null || selectedHeadline >= headlines.length) {
@@ -2470,6 +2536,140 @@ function destroyChart(id) {
   if (existing) existing.destroy();
 }
 
+// ── AI News Tab ──────────────────────────────────────────────────────────
+async function renderAINews() {
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading">Loading AI news...</div>';
+  try {
+    const res = await fetch('/api/ai-news');
+    const data = await res.json();
+    let articles = data.articles || [];
+
+    if (articles.length === 0) {
+      el.innerHTML = '<div class="empty"><div style="font-size:40px;margin-bottom:12px">🤖</div><div>No AI news available yet.</div><div class="muted" style="margin-top:8px">Run the aihot pipeline to generate curated AI news.</div></div>';
+      return;
+    }
+
+    // Collect filter options
+    const allSources = [...new Set(articles.map(a => a.source || 'Unknown'))];
+    const allTags = [...new Set(articles.flatMap(a => a.tags || []))];
+
+    // Build filter bar HTML
+    let filterHtml = `
+      <div class="filter-bar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;padding:12px;background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border)">
+        <span style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Filters</span>
+        <select id="aiFilterSource" onchange="applyAiFilters()" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">
+          <option value="all">All Sources</option>
+          ${allSources.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+        </select>
+        <select id="aiFilterTier" onchange="applyAiFilters()" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">
+          <option value="all">All Tiers</option>
+          <option value="T1">T1 (Official)</option>
+          <option value="T2">T2 (Media)</option>
+        </select>
+        <select id="aiFilterTag" onchange="applyAiFilters()" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">
+          <option value="all">All Tags</option>
+          ${allTags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
+        </select>
+        <select id="aiFilterScore" onchange="applyAiFilters()" style="background:var(--surface-alt);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:12px">
+          <option value="all">Min Score</option>
+          <option value="8">8+</option>
+          <option value="7">7+</option>
+          <option value="6">6+</option>
+        </select>
+        <span style="font-size:11px;color:var(--text-muted)">${articles.length} stories · updated ${esc(data.latest_date || 'recent')}</span>
+      </div>
+      <div id="aiNewsContainer"></div>`;
+
+    el.innerHTML = filterHtml;
+
+    // Store for filter to use
+    window._aiArticles = articles;
+
+    // Render with current filter state
+    window.applyAiFilters = function() {
+      const sourceF = document.getElementById('aiFilterSource')?.value || 'all';
+      const tierF = document.getElementById('aiFilterTier')?.value || 'all';
+      const tagF = document.getElementById('aiFilterTag')?.value || 'all';
+      const scoreF = parseInt(document.getElementById('aiFilterScore')?.value) || 0;
+
+      let filtered = window._aiArticles.filter(a => {
+        if (sourceF !== 'all' && a.source !== sourceF) return false;
+        if (tierF !== 'all' && a.tier !== tierF) return false;
+        if (tagF !== 'all' && !(a.tags || []).includes(tagF)) return false;
+        if (scoreF > 0 && (a.composite_score || 0) < scoreF) return false;
+        return true;
+      });
+
+      const container = document.getElementById('aiNewsContainer');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty" style="padding:40px 0">No articles match the selected filters.</div>';
+        return;
+      }
+
+      // Sources badge
+      const srcCounts = {};
+      filtered.forEach(a => { const s = a.source || 'Unknown'; srcCounts[s] = (srcCounts[s] || 0) + 1; });
+      const srcHtml = Object.entries(srcCounts).map(([s, c]) =>
+        '<span class="chip" style="background:var(--accent-light);color:var(--accent)">' + esc(s) + ' (' + c + ')</span>'
+      ).join(' ');
+
+      let html = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + srcHtml + '</div>';
+      html += '<div class="news-feed">';
+
+      filtered.forEach((a, i) => {
+        const score = a.composite_score || 0;
+        const tier = a.tier || '';
+        const tierBadge = tier === 'T1'
+          ? '<span class="chip" style="background:var(--up-bg);color:var(--up)">T1</span>'
+          : '<span class="chip" style="background:var(--amber-bg);color:var(--amber)">T2</span>';
+        const tags = (a.tags || []).map(function(t) { return '<span class="tag">' + esc(t) + '</span>'; }).join('');
+        const snippet = esc((a.snippet || '').replace(/<[^>]+>/g, '').substring(0, 300));
+        const summary = a.summary ? '<div class="muted" style="margin-top:6px;font-size:12px">💡 ' + esc(a.summary) + '</div>' : '';
+        const scoreColor = score >= 8 ? 'var(--up)' : score >= 7 ? 'var(--amber)' : 'var(--blue)';
+        const scoreBg = score >= 8 ? 'var(--up-bg)' : score >= 7 ? 'var(--amber-bg)' : 'var(--blue-bg)';
+        // Format date
+        var dateStr = a.published_at ? esc(a.published_at.substring(0, 10)) : '';
+        var niceDate = dateStr;
+        if (dateStr) {
+          var parts = dateStr.split('-');
+          if (parts.length === 3) {
+            var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            niceDate = months[parseInt(parts[1])-1] + ' ' + parseInt(parts[2]) + ', ' + parts[0];
+          }
+        }
+        var dateBadge = niceDate
+          ? '<span style="display:inline-block;font-size:11px;font-weight:600;background:var(--surface-alt);color:var(--text-muted);padding:1px 8px;border-radius:4px;margin-left:8px">' + niceDate + '</span>'
+          : '';
+
+        html += '<div class="story-card" style="margin-bottom:12px">' +
+          '<div class="story-rank" style="background:' + scoreBg + ';color:' + scoreColor + '">' + Math.round(score) + '</div>' +
+          '<div>' +
+            '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">' +
+              '<span style="font-size:11px;color:var(--text-muted)">' + esc(a.source || '') + '</span>' +
+              tierBadge +
+            '</div>' +
+            '<div class="story-title" style="margin-bottom:4px">' +
+              '<a href="' + esc(a.url || '#') + '" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none">' + esc(a.title || 'Untitled') + '</a>' +
+              dateBadge +
+            '</div>' +
+            '<div class="muted" style="font-size:12px;line-height:1.5">' + snippet + (snippet.length >= 300 ? '...' : '') + '</div>' +
+            summary +
+            '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">' + tags + '</div>' +
+          '</div></div>';
+      });
+
+      html += '</div>';
+      container.innerHTML = html;
+    };
+
+    // Initial render
+    window.applyAiFilters();
+  } catch (err) {
+    el.innerHTML = '<div class="empty">⚠️ Failed to load AI news: ' + esc(err.message) + '</div>';
+  }
+}
+
 // Chart 1: Market Momentum (Brief view)
 // Shows magnitude and direction of market moves as horizontal bars
 function renderMomentumChart(market) {
@@ -2518,148 +2718,6 @@ function renderMomentumChart(market) {
       }
     }
   });
-}
-
-// Category definitions for AI News filter
-  const CATEGORIES = [
-    { key: 'all',      label: '全部' },
-    { key: 'models',   label: '模型' },
-    { key: 'products', label: '产品' },
-    { key: 'industry', label: '行业' },
-    { key: 'papers',   label: '论文' },
-    { key: 'tips',     label: '技巧' },
-  ];
-  // Tag-to-category mapping
-  const TAG_CAT = {
-    models:   ['AI模型', 'AI模型发布', '模型发布', '模型', 'LLM', 'GPT', 'Claude', 'Gemini', 'Anthropic', 'OpenAI', 'Google', 'DeepSeek', 'Kimi', 'MiniMax', '阿里', '百度', '字节', 'AI代理', 'AI编码', 'AI应用'],
-    products: ['产品发布', '新品', '产品更新', 'AI应用', 'AI原生', 'AI初创'],
-    industry: ['行业', '融资', '诉讼', '监管', '市场竞争', '营销', '客户访谈', '公共卫生', '疫情', '可再生能源', '太阳能', '医疗技术', '马斯克'],
-    papers:   ['论文', '研究', '技术趋势', '未来展望', '开发者工具', '云基础设施'],
-    tips:     ['技巧', '教程', '指南', '社区热点'],
-  };
-  function articleCategory(a) {
-    const tags = a.tags || [];
-    const source = (a.source || '').toLowerCase();
-    for (const [cat, catTags] of Object.entries(TAG_CAT)) {
-      if (catTags.some(t => tags.includes(t) || source.includes(t.toLowerCase()))) return cat;
-    }
-    return 'all';
-  }
-
-  let activeCat = 'all';
-  let newsArticles = [];
-
-  function renderFilterBar(counts) {
-    return CATEGORIES.map(c => {
-      const cnt = counts[c.key] || 0;
-      const isActive = c.key === activeCat;
-      return `<button onclick="setNewsCat('${c.key}')" style="
-        padding:5px 14px;border-radius:20px;border:1px solid ${isActive?'var(--accent-primary)':'var(--border)'};
-        background:${isActive?'var(--accent-primary-bg)':'transparent'};
-        color:${isActive?'var(--accent-primary)':'var(--text-muted)'};
-        font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all 0.15s">
-        ${c.label} ${cnt > 0 ? '<span style="opacity:0.7">'+cnt+'</span>' : ''}
-      </button>`;
-    }).join('');
-  }
-
-  window.setNewsCat = function(cat) {
-    activeCat = cat;
-    renderNewsArticles(newsArticles);
-  };
-
-  function renderNewsArticles(arts) {
-    const filtered = activeCat === 'all' ? arts : arts.filter(a => articleCategory(a) === activeCat);
-    const byDate = {};
-    filtered.forEach(a => {
-      const d = (a.published_at || '').slice(0, 10);
-      if (!byDate[d]) byDate[d] = [];
-      byDate[d].push(a);
-    });
-    const counts = {};
-    CATEGORIES.forEach(c => {
-      counts[c.key] = c.key === 'all' ? arts.length : arts.filter(a => articleCategory(a) === c.key).length;
-    });
-    const dateSections = Object.entries(byDate).map(([date, arts2]) => {
-      const cnDate = date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_, y, m, day) => `${parseInt(m)}月${parseInt(day)}日`);
-      const rows = arts2.map(a => {
-        const tc = tierColors[a.tier] || '#64748b';
-        const tbg = tierBg[a.tier] || 'rgba(100,116,139,0.12)';
-        const sc = a.composite_score || 0;
-        const time = (a.published_at || '').slice(11, 16);
-        const tags = (a.tags || []).slice(0, 3);
-        const tagHtml = tags.map(t => `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:var(--surface-alt);color:var(--text-secondary);white-space:nowrap">${esc(t)}</span>`).join(' ');
-        return `<div style="display:grid;grid-template-columns:50px 1fr auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid var(--border-light)">
-          <div style="font-size:11px;color:var(--text-muted);padding-top:2px">${time || '--:--'}</div>
-          <div>
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-size:11px;color:${tc};font-weight:600">${esc(a.source || '')}</span>
-              <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${tbg};color:${tc};font-weight:600">${esc(a.tier || 'T2')}</span>
-              <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${scoreBg(sc)};color:${scoreColor(sc)};font-weight:700;font-family:monospace">${sc.toFixed(1)}</span>
-            </div>
-            <a href="${esc(a.url)}" target="_blank" rel="noopener" style="display:block;margin-top:4px;font-size:13px;color:var(--text);text-decoration:none;line-height:1.5">${esc(a.title || '')}</a>
-            ${a.summary ? `<div style="margin-top:4px;font-size:12px;color:var(--text-secondary);line-height:1.5">${esc(a.summary)}</div>` : ''}
-            ${tagHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${tagHtml}</div>` : ''}
-          </div>
-        </div>`;
-      }).join('');
-      return `<div style="margin-bottom:24px">
-        <div style="font-size:11px;font-weight:700;color:var(--accent-primary);letter-spacing:0.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">${cnDate}</div>
-        ${rows}
-      </div>`;
-    }).join('');
-    const totalCount = filtered.length;
-    const catCounts = {};
-    CATEGORIES.forEach(c => {
-      catCounts[c.key] = c.key === 'all' ? arts.length : arts.filter(a => articleCategory(a) === c.key).length;
-    });
-    document.getElementById('content').innerHTML = `
-      <div style="padding:20px 20px 16px;background:var(--surface);border-radius:12px;margin-bottom:20px;border:1px solid var(--border)">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
-          <div>
-            <div style="font-size:26px;font-weight:800;color:var(--text);line-height:1.2">精选</div>
-            <div style="font-size:13px;color:var(--text-secondary);margin-top:4px">AI 自动挑选的高价值内容</div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;padding-top:4px">
-            <span style="font-size:11px;color:var(--text-muted)">${totalCount} 条</span>
-            <span style="font-size:10px;padding:3px 8px;border-radius:20px;background:var(--accent-primary-bg);color:var(--accent-primary);font-weight:600">精选</span>
-          </div>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">${renderFilterBar(catCounts)}</div>
-      </div>
-      ${totalCount === 0 ? `
-        <div style="text-align:center;padding:60px 0">
-          <div style="font-size:48px;margin-bottom:12px">📡</div>
-          <div style="color:var(--text-secondary);font-size:14px">暂无精选内容</div>
-          <div style="color:var(--text-muted);font-size:12px;margin-top:6px">AIHOT  pipeline 每日 09:00 服务器时间运行</div>
-        </div>` : dateSections}`;
-  }
-
-  // tier/score helpers are used in renderNewsArticles — redefine here for closure
-  const tierColors = {{ 'T1': '#10B981', 'T1.5': '#6366f1', 'T2': '#64748b' }};
-  const tierBg = {{ 'T1': 'rgba(16,185,129,0.12)', 'T1.5': 'rgba(99,102,241,0.12)', 'T2': 'rgba(100,116,139,0.12)' }};
-  const scoreColor = s => s >= 8 ? '#0ECB81' : s >= 6 ? '#FFA028' : '#F6465D';
-  const scoreBg = s => s >= 8 ? 'rgba(14,203,129,0.12)' : s >= 6 ? 'rgba(255,160,40,0.12)' : 'rgba(246,70,93,0.12)';
-
-  async function renderNews() {
-  document.getElementById('content').innerHTML = '<div class="loading">Loading AI News...</div>';
-  try {
-    const res = await fetch('/api/ai-news');
-    if (res.ok) {
-      const data = await res.json();
-      newsArticles = data.articles || [];
-    }
-  } catch (e) {
-    // silently fail
-  }
-  renderNewsArticles(newsArticles);
-  }
-
-function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return `${r},${g},${b}`;
 }
 
 // Chart 2: Topic Heat Timeline (Intel view)
@@ -2973,7 +3031,7 @@ def inline_markdown(text):
     return text
 
 
-MM_PRIMER_PATH = Path.home() / ".hermes" / "bloomberg-portal" / "macromicro_primer.md"
+MM_PRIMER_PATH = Path("/home/admin/.hermes/bloomberg-portal/macromicro_primer.md")
 
 
 def parse_mm_primer():
@@ -3001,7 +3059,7 @@ def parse_mm_primer():
         primer_md = before + "## 2. Chronological Newsletter Summaries (Most Recent First)\n\n" + "\n".join(entries)
 
     # Inject article/PDF links from mm_article_links.json into the markdown
-    MM_LINKS_PATH = Path.home() / ".hermes" / "bloomberg-portal" / "mm_article_links.json"
+    MM_LINKS_PATH = Path("/home/admin/.hermes/bloomberg-portal/mm_article_links.json")
     mm_links = {}
     try:
         mm_links = json.loads(read_text(MM_LINKS_PATH) or "{}").get("links", {})
@@ -3153,6 +3211,30 @@ def _parse_followups(lines):
     return followups
 
 
+def build_ai_news():
+    """Build AI news feed from curated articles in ai_news/ directory."""
+    ai_dir = DATA_DIR / "ai_news"
+    if not ai_dir.exists():
+        return {"articles": [], "dates": []}
+    files = sorted(ai_dir.glob("*_精选.json"), reverse=True)
+    dates = [f.stem.split("_")[0] for f in files]
+    all_articles = []
+    seen = set()
+    for f in files[:7]:
+        try:
+            articles = json.loads(f.read_text(encoding="utf-8"))
+            for a in articles:
+                key = a.get("url", a.get("title", ""))
+                if key and key not in seen:
+                    seen.add(key)
+                    all_articles.append(a)
+        except (json.JSONDecodeError, OSError):
+            pass
+    # Sort by published_at descending (newest first)
+    all_articles.sort(key=lambda a: a.get("published_at", ""), reverse=True)
+    return {"articles": all_articles, "dates": dates, "latest_date": dates[0] if dates else None}
+
+
 HTML_PAGE = HTML_PAGE.replace("__CSS_VARS__", CSS_VARS).replace("{{", "{").replace("}}", "}")
 HTML_PAGE = HTML_PAGE.replace("__WB_STYLES__", MARKDOWN_RENDERER_STYLE)
 
@@ -3219,7 +3301,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond_html(f"<html><head><meta charset='UTF-8'></head><body><pre>{esc(content)}</pre></body></html>")
             elif path == "/api/ai-news":
-                self.respond_json(self.do_ai_news())
+                self.respond_json(build_ai_news())
             else:
                 self.send_error(404, "Not found")
         except Exception as exc:
@@ -3247,32 +3329,6 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Expires", "0")
         self.end_headers()
         self.wfile.write(body)
-
-    def do_ai_news(self):
-        """Return curated AIHOT articles from ai_news directory, sorted by score desc."""
-        if not AI_NEWS_DIR.exists():
-            return {"articles": []}
-        articles = []
-        for f in sorted(AI_NEWS_DIR.glob("*.json"), reverse=True):
-            try:
-                data = json.loads(f.read_text(encoding="utf-8"))
-                if isinstance(data, list):
-                    articles.extend(data)
-                elif isinstance(data, dict):
-                    articles.append(data)
-            except Exception:
-                pass
-        # Sort by published_at desc (newest first), then composite_score desc as tiebreaker
-        def _compare(a, b):
-            date_a = a.get("published_at", "")
-            date_b = b.get("published_at", "")
-            if date_b != date_a:
-                return (date_b > date_a) - (date_b < date_a)  # newer date first
-            score_a = a.get("composite_score", 0)
-            score_b = b.get("composite_score", 0)
-            return score_b - score_a  # higher score first
-        articles.sort(key=cmp_to_key(_compare))
-        return {"articles": articles[:20]}
 
     def log_message(self, fmt, *args):
         return
