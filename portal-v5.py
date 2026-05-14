@@ -4,6 +4,8 @@
 import json
 import os
 import re
+import sqlite3
+import subprocess
 from collections import Counter, defaultdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -2429,99 +2431,85 @@ async function renderKB() {
 }
 
 async function renderMM() {
-  document.getElementById('content').innerHTML = '<div class="loading">Loading MacroMicro Insights...</div>';
+  document.getElementById('content').innerHTML = '<div class="loading">Loading MacroMicro newsletters...</div>';
   let data;
   try {
     const res = await fetch('/api/mm');
     data = await res.json();
   } catch (err) {
-    document.getElementById('content').innerHTML = '<div class="empty">MacroMicro primer data unavailable.</div>';
+    document.getElementById('content').innerHTML = '<div class="empty">MacroMicro newsletter data unavailable.</div>';
     return;
   }
 
-  // ---- Key Data Table ----
-  const chartRows = (data.charts || []).length ? data.charts.map(row => {
-    const val = row.value || '';
-    const up = /▲|\+|surged|beat|highest|bullish/i.test(val);
-    const down = /▼|-|fell|lowest|bearish|declined/i.test(val);
-    const dirIcon = up ? '<span style="color:var(--up)">▲</span>' : down ? '<span style="color:var(--down)">▼</span>' : '';
-    return `<tr>
-      <td style="font-weight:600">${esc(row.metric)}</td>
-      <td>${dirIcon} ${esc(val)}</td>
-      <td style="color:var(--text-muted);font-size:11px">${esc(row.source||'')}</td>
-    </tr>`;
-  }).join('') : '<tr><td colspan="3" class="muted">No metrics data</td></tr>';
+  const newsletters = data.newsletters || [];
+  if (!newsletters.length) {
+    document.getElementById('content').innerHTML = '<div class="empty">No MacroMicro newsletters yet. Run the email monitor to sync bamboo.ocean emails.</div>';
+    return;
+  }
 
-  // ---- Recurring Themes (card-based, not edge-to-edge) ----
-  const themesHtml = (data.themes || []).length ? data.themes.map((t, i) => `
-    <div class="topic-card" style="border-color:var(--amber-bg);margin-bottom:10px">
-      <div class="topic-top">
-        <div class="topic-main">
-          <div class="topic-name" style="font-size:14px">
-            <span style="color:var(--amber);font-weight:800;margin-right:8px">${String.fromCharCode(65+i)}</span>${esc(t.title)}
-          </div>
-        </div>
-      </div>
-      <div style="margin-top:8px;font-size:12px;color:var(--text-secondary);line-height:1.6">
-        ${esc(t.body)}
-      </div>
-    </div>`).join('') : '<div class="muted">No themes data</div>';
+  // Format date helper
+  function fmtDate(dateStr) {
+    if (!dateStr) return '';
+    // dateStr format: "2026-05-14T11:30+00:00" → "May 14, 2026"
+    var m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return dateStr;
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[parseInt(m[2])-1] + ' ' + parseInt(m[3]) + ', ' + m[1];
+  }
 
-  // ---- Follow-Up Topics ----
-  const followupsHtml = (data.followups || []).length ? data.followups.map((f, i) => `
-    <div class="watch-item">
-      <div class="watch-rank">${i + 1}</div>
-      <div>
-        <div class="watch-title">${esc(f)}</div>
-      </div>
-    </div>`).join('') : '<div class="muted">No follow-up topics</div>';
+  // Strip HTML tags from body for excerpt display
+  function stripHtml(html) {
+    return (html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#\d+;/g, '').trim();
+  }
 
-  document.getElementById('content').innerHTML = `
-    <div class="section-header">
-      <div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">🔬</div>
-      <div class="section-title">MacroMicro Insights</div>
-      <div class="section-count">${data.generated_at || ''}</div>
-    </div>
+  // Detect PDF download links in body
+  function findLinks(body) {
+    var links = [];
+    var re = /https?:\/\/[^\s<>"]+/g;
+    var m;
+    while ((m = re.exec(body)) !== null) {
+      var url = m[0];
+      if (url.includes('macromicro') || url.includes('drive.google') || url.includes('pdf')) {
+        links.push(url);
+      }
+    }
+    return links;
+  }
 
-    <div class="section-header" style="margin-top:14px">
-      <div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">📖</div>
-      <div class="section-title">Primer</div>
-      <div class="section-count">9 newsletters · Apr 7–30, 2026</div>
-    </div>
-    <div class="card">
-      <div class="analysis-report-body" style="padding:8px 0">
-        ${data.primer_html || '<div class="muted">Primer not available</div>'}
-      </div>
-    </div>
+  var html = '<div class="section-header">';
+  html += '<div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">📧</div>';
+  html += '<div class="section-title">MacroMicro Newsletters</div>';
+  html += '<div class="section-count">' + newsletters.length + ' letters · bamboo.ocean</div>';
+  html += '</div>';
+  html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px">Last synced: ' + (data.generated_at || '').replace('T', ' ').replace('Z','') + ' UTC</div>';
 
-    <div class="section-header" style="margin-top:22px">
-      <div class="section-icon" style="background:rgba(14,203,129,0.12);color:#0ECB81">📊</div>
-      <div class="section-title">Key Data Points</div>
-      <div class="section-count">${(data.charts || []).length} metrics</div>
-    </div>
-    <div class="card">
-      <table class="quick-table" style="width:100%">
-        <thead><tr><th style="width:35%">Metric</th><th style="width:35%">Value</th><th>Source</th></tr></thead>
-        <tbody>${chartRows}</tbody>
-      </table>
-    </div>
+  newsletters.forEach(function(nl, i) {
+    var date = fmtDate(nl.date);
+    var excerpt = stripHtml(nl.body || nl.excerpt || '').substring(0, 500);
+    var links = findLinks(nl.body || '');
+    var linksHtml = '';
+    if (links.length) {
+      linksHtml = '<div style="margin-top:8px">';
+      links.forEach(function(url) {
+        var label = url.includes('drive.google') ? '📄 PDF Report' : (url.includes('macromicro') ? '🔗 View on MacroMicro' : '🔗 Link');
+        linksHtml += '<a href="' + esc(url) + '" target="_blank" rel="noopener" style="display:inline-block;margin-right:8px;font-size:11px;color:var(--blue);text-decoration:none;background:var(--blue-bg);padding:2px 8px;border-radius:4px">' + label + '</a>';
+      });
+      linksHtml += '</div>';
+    }
+    html += '<div class="card" style="margin-bottom:12px;padding:16px">';
+    html += '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:4px">' + esc(nl.subject || '(No subject)') + '</div>';
+    html += '<div style="font-size:11px;color:var(--text-muted)">' + (date ? '<span style="margin-right:8px">📅 ' + date + '</span>' : '') + '<span>📧 bamboo.ocean</span></div>';
+    html += '</div></div>';
+    if (excerpt) {
+      html += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-top:8px">' + esc(excerpt) + (excerpt.length >= 500 ? '…' : '') + '</div>';
+    }
+    html += linksHtml;
+    html += '</div>';
+  });
 
-    <div class="section-header" style="margin-top:22px">
-      <div class="section-icon" style="background:var(--amber-bg);color:var(--amber)">♺</div>
-      <div class="section-title">Recurring Themes</div>
-      <div class="section-count">${(data.themes || []).length} themes</div>
-    </div>
-    ${themesHtml}
-
-    <div class="section-header" style="margin-top:22px">
-      <div class="section-icon" style="background:var(--red-bg);color:var(--red)">🎯</div>
-      <div class="section-title">Follow-Up Topics</div>
-      <div class="section-count">${(data.followups || []).length} topics</div>
-    </div>
-    <div class="card">
-      <div class="watch-grid">${followupsHtml}</div>
-    </div>
-  `;
+  document.getElementById('content').innerHTML = html;
 }
 
 // ---- Chart.js Integration (Focused Intelligence Charts) ----
@@ -3165,6 +3153,96 @@ def parse_mm_primer():
     return result
 
 
+def _fetch_mm_email_body(account: str, email_id: str) -> str:
+    """Fetch email body via himalaya CLI with correct HOME."""
+    himalaya = Path("/home/admin/.local/bin/himalaya")
+    env = os.environ.copy()
+    env["HOME"] = "/home/admin"
+    try:
+        result = subprocess.run(
+            [str(himalaya), "message", "read", "--account", account, str(email_id)],
+            capture_output=True, text=True, timeout=30, env=env
+        )
+        if result.returncode == 0:
+            return result.stdout
+    except Exception:
+        pass
+    return ""
+
+
+def _strip_html(text: str) -> str:
+    """Remove HTML tags for plain text excerpt."""
+    return re.sub(r"<[^>]+>", "", text).strip()
+
+
+def _clean_email_body(body: str) -> str:
+    """Strip email headers and HTML cruft, return just the message body text."""
+    if not body:
+        return ""
+    # Remove <#part type=text/html> marker line only (keep content after it)
+    body = re.sub(r"<#part[^>]*>\s*", "", body)
+    # Remove email header lines (From:, To:, Subject:, Date:)
+    body = re.sub(r"^(From|To|Subject|Date|Sent|Reply-To):.*\n?", "", body, flags=re.MULTILINE)
+    # Strip remaining HTML tags
+    body = re.sub(r"<[^>]+>", "", body)
+    # Decode common HTML entities
+    body = body.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&#39;", "'").replace("&quot;", '"')
+    # Clean up excessive whitespace
+    body = re.sub(r"[ \t]+", " ", body)
+    body = re.sub(r"\n{3,}", "\n\n", body)
+    return body.strip()
+
+
+def build_mm_newsletters():
+    """Fetch MacroMicro newsletters from the email DB, fetching bodies on demand."""
+    db_path = Path("/home/admin/.hermes/email-monitor/emails.db")
+    if not db_path.exists():
+        return {"newsletters": [], "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z"}
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT email_id, account, subject, sender_email, date, body
+        FROM emails
+        WHERE sender_email LIKE '%macromicro%'
+        ORDER BY date DESC
+        LIMIT 30
+    """)
+    rows = cur.fetchall()
+    conn.close()
+
+    newsletters = []
+    for row in rows:
+        email_id = row["email_id"]
+        account = row["account"]
+        subject = row["subject"]
+        date = row["date"]
+        body = row["body"] or ""
+
+        # Fetch body on demand if empty
+        if not body.strip():
+            body = _fetch_mm_email_body(account, email_id)
+
+        # Extract plain-text excerpt from HTML body
+        cleaned = _clean_email_body(body)
+        excerpt = cleaned[:500]
+
+        newsletters.append({
+            "email_id": email_id,
+            "account": account,
+            "subject": subject,
+            "date": date,
+            "excerpt": excerpt,
+            "body": body,
+        })
+
+    return {
+        "newsletters": newsletters,
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+
+
 def _parse_themes(lines):
     """Parse recurring themes from markdown subsections (### Title + body text)."""
     themes = []
@@ -3289,10 +3367,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond_json(report)
             elif path == "/api/mm":
-                data = parse_mm_primer()
-                if data is None:
-                    self.send_error(404, "MM primer not found")
-                    return
+                data = build_mm_newsletters()
                 self.respond_json(data)
             elif path == "/api/mm-primer":
                 content = read_text(MM_PRIMER_PATH)

@@ -226,9 +226,12 @@ def read_email_body(account, email_id):
     """Read the body of a specific email."""
     himalaya = get_himalaya_path()
     
+    env = os.environ.copy()
+    env["HOME"] = "/home/admin"
+    
     result = subprocess.run(
         [str(himalaya), "message", "read", "--account", account, str(email_id)],
-        capture_output=True, text=True, timeout=30
+        capture_output=True, text=True, timeout=30, env=env
     )
     
     if result.returncode != 0:
