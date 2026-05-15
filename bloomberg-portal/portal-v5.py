@@ -2523,11 +2523,7 @@ async function renderMM() {
         </ul>
       </div>` : '';
     
-    // Data points HTML
-    const dpsHtml = (nl.data_points || []).length ? `
-      <div class="nl-metrics">
-        ${nl.data_points.map(dp => `<span class="nl-metric">📊 ${esc(dp)}</span>`).join('')}
-      </div>` : '';
+    // Data points removed — not useful to user
     
     // PDF link
     const linkHtml = nl.pdf_link ? `
@@ -2545,7 +2541,6 @@ async function renderMM() {
         <div class="mm-subject">${esc(nl.subject||'Untitled')}</div>
         <div class="mm-brief">${esc(nl.brief||'')}</div>
         ${kpsHtml}
-        ${dpsHtml}
         ${linkHtml}
       </div>`;
   }).join('') : '<div class="empty">No MacroMicro newsletters found. Check email sync.</div>';
@@ -3323,20 +3318,8 @@ def _parse_mm_email_into_summary(body: str, subject: str) -> dict:
                 not re.match(r'^\s*\(?https?://', sec)):
                 key_points.append(sec)
     
-    # ── 6. Extract data points (numbers + context) ─────────────────────────
+    # ── 6. Extract data points (disabled — not useful to user) ─────────────────
     data_points = []
-    dp_patterns = [
-        r"\$[\d,]+(?:\.\d+)?\s*(?:billion|million|trillion|B|M|T|%)?",
-        r"\d[\d,]*\.?\d*(?:\.\d+)?\s*(?:%|percent|billion|million|year-over-year|YoY|quarter|q[1-4])",
-        r"S&P\s*(?:500)?\s*[\d,]+(?:\.\d+)?\s*(?:points?)?",
-        r"[\d,]+(?:\.\d+)?\s*(?:points?|%)",
-    ]
-    for pat in dp_patterns:
-        for m in re.findall(pat, text):
-            clean = re.sub(r"\s+", " ", m).strip()
-            if 10 < len(clean) < 150:
-                data_points.append(clean)
-    data_points = list(dict.fromkeys(data_points))[:15]
     
     # ── 7. Build body_html ───────────────────────────────────────────────
     body_html = ""
