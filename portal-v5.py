@@ -3343,6 +3343,104 @@ def _parse_mm_email_into_summary(body: str, subject: str) -> dict:
     }
 
 
+MM_ENRICH_CACHE = Path("/home/admin/.hermes/bloomberg-portal/mm_enrich_cache.json")
+
+def _enrich_key_points(body: str, subject: str, email_id: str) -> list[str]:
+    """Use DeepSeek to generate rich analytical key points from newsletter body.
+    Falls back to regex on failure. Returns list of key point strings."""
+    import subprocess, tempfile
+    
+    # Check cache first
+    cache = {}
+    if MM_ENRICH_CACHE.exists():
+        try:
+            cache = json.loads(MM_ENRICH_CACHE.read_text())
+        except: pass
+    
+    if email_id in cache:
+        return cache[email_id]
+    
+    # Clean body for LLM
+    text = re.sub(r"<[^>]+>", " ", body)
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\r?\n{3,}", "\n\n", text).strip()
+    # Truncate to ~8000 chars for context window
+    if len(text) > 8000:
+        text = text[:8000] + "..."
+    
+    prompt = f"""You are a MacroMicro newsletter analyst. Read this newsletter and write 4-6 key insights as bullet points. 
+
+Each bullet should:
+- Be a complete paragraph (2-4 sentences) explaining the significance, not just stating a fact
+- Connect the topic to broader market/economic/geopolitical context
+- Include specific numbers/data when present in the source
+- Be analytical, not just summarizing — explain WHY this matters
+
+Subject: {subject}
+
+Newsletter:
+{text}
+
+Respond with ONLY the bullet points, one per line. No markdown formatting, no headers, no labels. Just the bullet text."""
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        # Fallback: read from .env file directly
+        env_file = Path("/home/admin/.hermes/.env")
+        if env_file.exists():
+            for line in env_file.read_text().split("\n"):
+                if line.startswith("DEEPSEEK_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+    if not api_key:
+        return []
+    
+    payload = {
+        "model": "deepseek-v4-flash",
+        "messages": [
+            {"role": "system", "content": "You are a senior macro research analyst. Write insightful, analytical key points. Be concise but thorough. No fluff."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.4,
+        "max_tokens": 2048
+    }
+    
+    payload_bytes = json.dumps(payload).encode("utf-8")
+    
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "https://api.deepseek.com/v1/chat/completions",
+             "-H", "Content-Type: application/json",
+             "-H", f"Authorization: Bearer {api_key}",
+             "-d", "@-", "--max-time", "90"],
+            input=payload_bytes, capture_output=True, text=True, timeout=100
+        )
+        data = json.loads(result.stdout)
+        content = (data.get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+        
+        if content:
+            # Split into bullet points
+            points = []
+            for line in content.split("\n"):
+                line = line.strip()
+                # Strip bullet markers
+                line = re.sub(r"^[-*•]\s*", "", line)
+                line = re.sub(r"^\d+[\.\)]\s*", "", line)
+                if len(line) > 60 and not line.startswith("http"):
+                    points.append(line)
+            
+            if points:
+                # Cache result
+                cache[email_id] = points
+                MM_ENRICH_CACHE.write_text(json.dumps(cache, ensure_ascii=False, indent=2))
+                return points
+    except Exception as e:
+        print(f"[MM] DeepSeek enrich failed for {email_id}: {e}")
+    
+    return []
+
+
 def build_mm_newsletters():
     """Fetch real MacroMicro newsletters from email DB, parse into structured summaries."""
     db_path = Path("/home/admin/.hermes/email-monitor/emails.db")
@@ -3382,6 +3480,11 @@ def build_mm_newsletters():
             body = _fetch_mm_email_body(account, email_id)
 
         parsed = _parse_mm_email_into_summary(body, subject)
+        
+        # Try LLM enrichment — replaces shallow regex key_points with deep analysis
+        enriched = _enrich_key_points(body, subject, email_id)
+        if enriched:
+            parsed["key_points"] = enriched
         
         # Fallback excerpt
         if not parsed["brief"]:
