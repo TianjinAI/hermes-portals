@@ -2431,123 +2431,99 @@ async function renderKB() {
 }
 
 async function renderMM() {
-  document.getElementById('content').innerHTML = '<div class="loading">Loading MacroMicro newsletters...</div>';
+  document.getElementById('content').innerHTML = '<div class="loading">Loading MacroMicro Insights...</div>';
   let data;
   try {
     const res = await fetch('/api/mm');
     data = await res.json();
   } catch (err) {
-    document.getElementById('content').innerHTML = '<div class="empty">MacroMicro newsletter data unavailable.</div>';
+    document.getElementById('content').innerHTML = '<div class="empty">MacroMicro primer data unavailable.</div>';
     return;
   }
 
-  const newsletters = data.newsletters || [];
-  if (!newsletters.length) {
-    document.getElementById('content').innerHTML = '<div class="empty">No MacroMicro newsletters yet. Run the email monitor to sync bamboo.ocean emails.</div>';
-    return;
-  }
+  // ---- Key Data Table ----
+  const chartRows = (data.charts || []).length ? data.charts.map(row => {
+    const val = row.value || '';
+    const up = /▲|\+|surged|beat|highest|bullish/i.test(val);
+    const down = /▼|-|fell|lowest|bearish|declined/i.test(val);
+    const dirIcon = up ? '<span style="color:var(--up)">▲</span>' : down ? '<span style="color:var(--down)">▼</span>' : '';
+    return `<tr>
+      <td style="font-weight:600">${esc(row.metric)}</td>
+      <td>${dirIcon} ${esc(val)}</td>
+      <td style="color:var(--text-muted);font-size:11px">${esc(row.source||'')}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="3" class="muted">No metrics data</td></tr>';
 
-  // Format date helper
-  function fmtDate(dateStr) {
-    if (!dateStr) return '';
-    // dateStr format: "2026-05-14T11:30+00:00" → "May 14, 2026"
-    var m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!m) return dateStr;
-    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return months[parseInt(m[2])-1] + ' ' + parseInt(m[3]) + ', ' + m[1];
-  }
+  // ---- Recurring Themes (card-based, not edge-to-edge) ----
+  const themesHtml = (data.themes || []).length ? data.themes.map((t, i) => `
+    <div class="topic-card" style="border-color:var(--amber-bg);margin-bottom:10px">
+      <div class="topic-top">
+        <div class="topic-main">
+          <div class="topic-name" style="font-size:14px">
+            <span style="color:var(--amber);font-weight:800;margin-right:8px">${String.fromCharCode(65+i)}</span>${esc(t.title)}
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--text-secondary);line-height:1.6">
+        ${esc(t.body)}
+      </div>
+    </div>`).join('') : '<div class="muted">No themes data</div>';
 
-  // Strip HTML tags from body for excerpt display
-  function stripHtml(html) {
-    return (html || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#\d+;/g, '').trim();
-  }
+  // ---- Follow-Up Topics ----
+  const followupsHtml = (data.followups || []).length ? data.followups.map((f, i) => `
+    <div class="watch-item">
+      <div class="watch-rank">${i + 1}</div>
+      <div>
+        <div class="watch-title">${esc(f)}</div>
+      </div>
+    </div>`).join('') : '<div class="muted">No follow-up topics</div>';
 
-  // Detect PDF download links in body
-  function findLinks(body) {
-    var links = [];
-    var re = /https?:\/\/[^\s<>"]+/g;
-    var m;
-    while ((m = re.exec(body)) !== null) {
-      var url = m[0];
-      if (url.includes('macromicro') || url.includes('drive.google') || url.includes('pdf')) {
-        links.push(url);
-      }
-    }
-    return links;
-  }
+  document.getElementById('content').innerHTML = `
+    <div class="section-header">
+      <div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">🔬</div>
+      <div class="section-title">MacroMicro Insights</div>
+      <div class="section-count">${data.generated_at || ''}</div>
+    </div>
 
-  var html = '<div class="section-header">';
-  html += '<div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">📧</div>';
-  html += '<div class="section-title">MacroMicro Newsletters</div>';
-  html += '<div class="section-count">' + newsletters.length + ' letters · bamboo.ocean</div>';
-  html += '</div>';
-  html += '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px">Last synced: ' + (data.generated_at || '').replace('T', ' ').replace('Z','') + ' UTC</div>';
+    <div class="section-header" style="margin-top:14px">
+      <div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">📖</div>
+      <div class="section-title">Primer</div>
+      <div class="section-count">9 newsletters · Apr 7–30, 2026</div>
+    </div>
+    <div class="card">
+      <div class="analysis-report-body" style="padding:8px 0">
+        ${data.primer_html || '<div class="muted">Primer not available</div>'}
+      </div>
+    </div>
 
-  newsletters.forEach(function(nl, i) {
-    var date = fmtDate(nl.date);
-    // Structured fields from parsed email
-    var ntype = nl.type || 'Newsletter';
-    var brief = nl.brief || '';
-    var keyPoints = nl.key_points || [];
-    var dataPoints = nl.data_points || [];
-    var pdfLink = nl.pdf_link || '';
-    var bodyHtml = nl.body_html || '';
+    <div class="section-header" style="margin-top:22px">
+      <div class="section-icon" style="background:rgba(14,203,129,0.12);color:#0ECB81">📊</div>
+      <div class="section-title">Key Data Points</div>
+      <div class="section-count">${(data.charts || []).length} metrics</div>
+    </div>
+    <div class="card">
+      <table class="quick-table" style="width:100%">
+        <thead><tr><th style="width:35%">Metric</th><th style="width:35%">Value</th><th>Source</th></tr></thead>
+        <tbody>${chartRows}</tbody>
+      </table>
+    </div>
 
-    // Type badge color
-    var typeColors = {
-      'WEFC': 'background:rgba(14,203,129,0.12);color:#0ECB81',
-      'CEO House View': 'background:rgba(168,85,247,0.12);color:#A855F7',
-      'Research Report': 'background:rgba(249,115,22,0.12);color:#F97316',
-      'Flash': 'background:rgba(239,68,68,0.12);color:#EF4444',
-      'Q&A / Flash': 'background:rgba(245,158,11,0.12);color:#F59E0B',
-      'Analysis': 'background:rgba(59,130,246,0.12);color:#3B82F6',
-    };
-    var typeStyle = typeColors[ntype] || 'background:rgba(100,100,100,0.12);color:#888';
+    <div class="section-header" style="margin-top:22px">
+      <div class="section-icon" style="background:var(--amber-bg);color:var(--amber)">♺</div>
+      <div class="section-title">Recurring Themes</div>
+      <div class="section-count">${(data.themes || []).length} themes</div>
+    </div>
+    ${themesHtml}
 
-    html += '<div class="card" style="margin-bottom:16px;padding:18px">';
-    // Header row: type badge + date + subject
-    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">';
-    html += '<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;' + esc(typeStyle) + '">' + esc(ntype) + '</span>';
-    html += '<span style="font-size:11px;color:var(--text-muted)">' + (date ? '📅 ' + esc(date) : '') + '</span>';
-    html += '</div>';
-    html += '<div style="font-size:15px;font-weight:700;color:var(--text);line-height:1.4;margin-bottom:8px">' + esc(nl.subject || '(No subject)') + '</div>';
-
-    // Brief summary
-    if (brief) {
-      html += '<div style="font-size:12px;color:var(--text-secondary);line-height:1.7;margin-bottom:12px;font-style:italic;border-left:3px solid var(--blue);padding-left:10px">' + esc(brief) + '</div>';
-    }
-
-    // Key points
-    if (keyPoints.length) {
-      html += '<div style="margin-bottom:12px">';
-      html += '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Key Points</div>';
-      html += '<ul style="margin:0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.7">';
-      keyPoints.forEach(function(kp) {
-        html += '<li>' + esc(kp) + '</li>';
-      });
-      html += '</ul></div>';
-    }
-
-    // Data points
-    if (dataPoints.length) {
-      html += '<div style="margin-bottom:12px">';
-      html += '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Data Points</div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
-      dataPoints.slice(0, 8).forEach(function(dp) {
-        html += '<span style="font-size:11px;background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:6px;font-family:monospace">' + esc(dp) + '</span>';
-      });
-      html += '</div></div>';
-    }
-
-    // PDF link
-    if (pdfLink) {
-      html += '<div style="margin-top:10px"><a href="' + esc(pdfLink) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#fff;background:var(--blue);padding:5px 12px;border-radius:6px;text-decoration:none;font-weight:600">📄 Download Full Report (PDF)</a></div>';
-    }
-
-    html += '</div>';
-  });
-
-  document.getElementById('content').innerHTML = html;
+    <div class="section-header" style="margin-top:22px">
+      <div class="section-icon" style="background:var(--red-bg);color:var(--red)">🎯</div>
+      <div class="section-title">Follow-Up Topics</div>
+      <div class="section-count">${(data.followups || []).length} topics</div>
+    </div>
+    <div class="card">
+      <div class="watch-grid">${followupsHtml}</div>
+    </div>
+  `;
 }
 
 // ---- Chart.js Integration (Focused Intelligence Charts) ----
@@ -3527,7 +3503,10 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond_json(report)
             elif path == "/api/mm":
-                data = build_mm_newsletters()
+                data = parse_mm_primer()
+                if data is None:
+                    self.send_error(404, "MM primer not found")
+                    return
                 self.respond_json(data)
             elif path == "/api/mm-primer":
                 content = read_text(MM_PRIMER_PATH)
