@@ -3564,12 +3564,17 @@ def build_ai_news():
     all_articles = []
     seen = set()
     for f in files[:7]:
+        file_date = f.stem.split("_")[0]  # e.g. "20260515"
+        file_date_iso = f"{file_date[:4]}-{file_date[4:6]}-{file_date[6:8]}T12:00:00Z"
         try:
             articles = json.loads(f.read_text(encoding="utf-8"))
             for a in articles:
                 key = a.get("url", a.get("title", ""))
                 if key and key not in seen:
                     seen.add(key)
+                    # Fallback: use file date if published_at is empty (MiniMax strips it)
+                    if not a.get("published_at"):
+                        a["published_at"] = file_date_iso
                     all_articles.append(a)
         except (json.JSONDecodeError, OSError):
             pass

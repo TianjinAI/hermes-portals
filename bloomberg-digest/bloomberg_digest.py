@@ -35,10 +35,10 @@ SUMM_DIR = OUTPUT_DIR / "summaries"  # per-newsletter summaries
 KB_DIR = OUTPUT_DIR / "knowledge"    # cumulative knowledge base
 
 # LLM config — use fast models to keep pipeline under 3 min
-LLM_BASE_URL = "https://opencode.ai/zen/v1"
-LLM_MODEL_STAGE1 = "gpt-5.4-nano"   # fast per-newsletter summaries (~2s each)
-LLM_MODEL_STAGE2 = "claude-haiku-4-5"  # better reasoning for combined digest
-LLM_MODEL_ENTITIES = "claude-haiku-4-5"  # reliable JSON extraction for entities/themes/facts
+LLM_BASE_URL = "https://api.deepseek.com/v1"
+LLM_MODEL_STAGE1 = "deepseek-v4-flash"
+LLM_MODEL_STAGE2 = "deepseek-v4-flash"
+LLM_MODEL_ENTITIES = "deepseek-v4-flash"
 
 # Timezone
 USER_TZ = timezone(timedelta(hours=-5))  # CDT
@@ -48,12 +48,30 @@ UTC = timezone.utc
 # ─── Helpers ─────────────────────────────────────────────────────────────
 
 def get_api_key():
-    env_path = Path.home() / ".hermes" / ".env"
-    with open(env_path) as f:
-        for line in f:
-            if line.startswith("OPENCODE_ZEN_API_KEY="):
-                return line.strip().split("=", 1)[1]
-    raise RuntimeError("OPENCODE_ZEN_API_KEY not found")
+    """Read API key from .env — prefer DEEPSEEK for reliability."""
+    env_paths = [
+        Path.home() / ".hermes" / ".env",
+        Path.home() / ".env",
+    ]
+    # Try DEEPSEEK first (known working)
+    for env_path in env_paths:
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith("DEEPSEEK_API_KEY="):
+                        key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                        if key:
+                            return key
+    # Fallback to OPENCODE_ZEN_API_KEY
+    for env_path in env_paths:
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith("OPENCODE_ZEN_API_KEY="):
+                        key = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                        if key:
+                            return key
+    raise RuntimeError("No valid API key found (tried DEEPSEEK_API_KEY, OPENCODE_ZEN_API_KEY)")
 
 
 def run_himalaya(*args, timeout=60):
