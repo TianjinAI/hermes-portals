@@ -3290,31 +3290,38 @@ def _parse_mm_email_into_summary(body: str, subject: str) -> dict:
     brief = sents[0] or ""
     if len(brief) < 40 and len(sents) > 1:
         brief = sents[0] + " " + sents[1]
-    brief = re.sub(r"\s+", " ", brief).strip()[:400]
+    brief = re.sub(r"\s+", " ", brief).strip()[:1000]
     
-    # ── 5. Extract key sections (Roman numeral sections or "Key Focus") ───
+    # ── 5. Extract key sections (Key Focus / Key Highlights / Roman numeral) ───
     key_points = []
-    # Try Key Focus section first
-    kf = re.search(r"Key Focus[^.!?]{0,5}([^.!?]{100,800})", text, re.DOTALL)
-    if kf:
-        items = re.split(r'(?<=[.!?])\s+(?=[A-Z])', kf.group(1))
-        for item in items[:5]:
-            item = item.strip()
-            if len(item) > 40:
-                key_points.append(re.sub(r"\s+", " ", item)[:300])
+    # Try Key Focus / Key Highlights section — capture up to the next major delimiter
+    kf_match = re.search(
+        r'Key\s+(?:Focus|Highlights|Points|Takeaways)[^\n]*\n\s*\n(.*?)(?=\n\s*download the full report|\n\s*About Weekly|\n\s*WEFC Feedback|\n\s*I\.\s|\Z)',
+        text, re.DOTALL | re.IGNORECASE
+    )
+    if kf_match:
+        kf_body = kf_match.group(1).strip()
+        # Split into individual paragraphs by 2+ newlines
+        paragraphs = re.split(r'\n\s*\n', kf_body)
+        for p in paragraphs:
+            p = re.sub(r'\s+', ' ', p).strip()
+            # Skip URL-only, survey links, very short, or boilerplate
+            if (len(p) > 60 and
+                not re.match(r'^https?://', p) and
+                not re.search(r'feedback survey|fill out our survey|download the full', p, re.IGNORECASE)):
+                key_points.append(p)
     else:
         # Fall back to splitting by Roman numeral sections
         sections = re.split(r'\n\n+', text)
         for sec in sections:
             sec = sec.strip()
-            # Only take sections that start with Roman numeral or Key/Brief/etc. heading
             if (len(sec) > 80 and
                 (re.match(r'^[IVXL]+\.[ \t]', sec) or
                  re.match(r'^Key\s', sec, re.IGNORECASE) or
                  re.match(r'^Brief\s', sec, re.IGNORECASE) or
                  re.match(r'^MM\s', sec)) and
                 not re.match(r'^\s*\(?https?://', sec)):
-                key_points.append(sec[:300])
+                key_points.append(sec)
     
     # ── 6. Extract data points (numbers + context) ─────────────────────────
     data_points = []
