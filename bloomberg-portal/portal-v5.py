@@ -1304,10 +1304,61 @@ __WB_STYLES__
     font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px;
     line-height: 1.4;
   }}
-  .topic-meta {{
+  .topic-meta {
     font-size: 11px; color: var(--text-muted); display: flex; gap: 10px;
     flex-wrap: wrap;
   }}
+
+  /* ── MM Newsletter Cards ── */
+  .mm-card {
+    margin-bottom: 16px;
+    border-left: 3px solid var(--blue);
+  }
+  .mm-card-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .mm-type-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .mm-date {
+    font-size: 11px; color: var(--text-muted); margin-left: auto;
+  }
+  .mm-id {
+    font-size: 10px; color: var(--text-muted); font-family: monospace;
+  }
+  .mm-subject {
+    font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px;
+    line-height: 1.4;
+  }
+  .mm-brief {
+    font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 10px;
+  }
+  .nl-section { margin-bottom: 10px; }
+  .nl-section-title {
+    font-size: 11px; font-weight: 700; color: var(--amber); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 4px;
+  }
+  .nl-list {
+    margin: 0; padding-left: 18px; font-size: 12px; color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .nl-metrics {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+  }
+  .nl-metric {
+    font-size: 11px; background: rgba(66,165,245,0.1);
+    border: 1px solid rgba(66,165,245,0.25); border-radius: 6px;
+    padding: 3px 8px; color: var(--blue);
+  }
+  .nl-link {
+    display: inline-block; font-size: 12px; font-weight: 600;
+    color: var(--blue); text-decoration: none; margin-top: 4px;
+    padding: 4px 10px; border: 1px solid var(--blue);
+    border-radius: 6px; transition: background 0.15s;
+  }
+  .nl-link:hover { background: rgba(66,165,245,0.1); }
 </style>
 </head>
 <body>
@@ -2431,97 +2482,82 @@ async function renderKB() {
 }
 
 async function renderMM() {
-  document.getElementById('content').innerHTML = '<div class="loading">Loading MacroMicro Insights...</div>';
+  document.getElementById('content').innerHTML = '<div class="loading">Loading MacroMicro Newsletters...</div>';
   let data;
   try {
     const res = await fetch('/api/mm');
     data = await res.json();
   } catch (err) {
-    document.getElementById('content').innerHTML = '<div class="empty">MacroMicro primer data unavailable.</div>';
+    document.getElementById('content').innerHTML = '<div class="empty">MacroMicro data unavailable.</div>';
     return;
   }
 
-  // ---- Key Data Table ----
-  const chartRows = (data.charts || []).length ? data.charts.map(row => {
-    const val = row.value || '';
-    const up = /▲|\+|surged|beat|highest|bullish/i.test(val);
-    const down = /▼|-|fell|lowest|bearish|declined/i.test(val);
-    const dirIcon = up ? '<span style="color:var(--up)">▲</span>' : down ? '<span style="color:var(--down)">▼</span>' : '';
-    return `<tr>
-      <td style="font-weight:600">${esc(row.metric)}</td>
-      <td>${dirIcon} ${esc(val)}</td>
-      <td style="color:var(--text-muted);font-size:11px">${esc(row.source||'')}</td>
-    </tr>`;
-  }).join('') : '<tr><td colspan="3" class="muted">No metrics data</td></tr>';
-
-  // ---- Recurring Themes (card-based, not edge-to-edge) ----
-  const themesHtml = (data.themes || []).length ? data.themes.map((t, i) => `
-    <div class="topic-card" style="border-color:var(--amber-bg);margin-bottom:10px">
-      <div class="topic-top">
-        <div class="topic-main">
-          <div class="topic-name" style="font-size:14px">
-            <span style="color:var(--amber);font-weight:800;margin-right:8px">${String.fromCharCode(65+i)}</span>${esc(t.title)}
-          </div>
+  const newsletters = data.newsletters || [];
+  
+  // Build newsletter cards
+  const cardsHtml = newsletters.length ? newsletters.map((nl, i) => {
+    // Type badge color
+    const typeColors = {
+      'CEO House View': 'var(--amber)',
+      'Weekly': 'var(--blue)',
+      'Analysis': 'var(--green)',
+      'Special Report': 'var(--purple)',
+      'Q&A / Flash': 'var(--cyan)',
+      'Research Report': 'var(--orange)',
+      'Newsletter': 'var(--text-secondary)'
+    };
+    const typeColor = typeColors[nl.type] || 'var(--text-secondary)';
+    
+    // Format date
+    let dateStr = '';
+    try {
+      dateStr = new Date(nl.date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+    } catch(e) { dateStr = nl.date || ''; }
+    
+    // Key points HTML
+    const kpsHtml = (nl.key_points || []).length ? `
+      <div class="nl-section">
+        <div class="nl-section-title">🔑 Key Points</div>
+        <ul class="nl-list">
+          ${nl.key_points.map(kp => `<li>${esc(kp)}</li>`).join('')}
+        </ul>
+      </div>` : '';
+    
+    // Data points HTML
+    const dpsHtml = (nl.data_points || []).length ? `
+      <div class="nl-metrics">
+        ${nl.data_points.map(dp => `<span class="nl-metric">📊 ${esc(dp)}</span>`).join('')}
+      </div>` : '';
+    
+    // PDF link
+    const linkHtml = nl.pdf_link ? `
+      <a class="nl-link" href="${nl.pdf_link}" target="_blank" rel="noopener">📄 View Full Report →</a>` : '';
+    
+    return `
+      <div class="card mm-card">
+        <div class="mm-card-header">
+          <span class="mm-type-badge" style="background:${typeColor}22;color:${typeColor};border:1px solid ${typeColor}44">
+            ${esc(nl.type)}
+          </span>
+          <span class="mm-date">${dateStr}</span>
+          <span class="mm-id">#${esc(nl.email_id||'')}</span>
         </div>
-      </div>
-      <div style="margin-top:8px;font-size:12px;color:var(--text-secondary);line-height:1.6">
-        ${esc(t.body)}
-      </div>
-    </div>`).join('') : '<div class="muted">No themes data</div>';
-
-  // ---- Follow-Up Topics ----
-  const followupsHtml = (data.followups || []).length ? data.followups.map((f, i) => `
-    <div class="watch-item">
-      <div class="watch-rank">${i + 1}</div>
-      <div>
-        <div class="watch-title">${esc(f)}</div>
-      </div>
-    </div>`).join('') : '<div class="muted">No follow-up topics</div>';
+        <div class="mm-subject">${esc(nl.subject||'Untitled')}</div>
+        <div class="mm-brief">${esc(nl.brief||'')}</div>
+        ${kpsHtml}
+        ${dpsHtml}
+        ${linkHtml}
+      </div>`;
+  }).join('') : '<div class="empty">No MacroMicro newsletters found. Check email sync.</div>';
 
   document.getElementById('content').innerHTML = `
     <div class="section-header">
-      <div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">🔬</div>
-      <div class="section-title">MacroMicro Insights</div>
-      <div class="section-count">${data.generated_at || ''}</div>
+      <div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">📨</div>
+      <div class="section-title">MacroMicro Newsletters</div>
+      <div class="section-count">${newsletters.length} newsletters · ${data.generated_at || ''}</div>
     </div>
-
-    <div class="section-header" style="margin-top:14px">
-      <div class="section-icon" style="background:rgba(8,145,178,0.12);color:#0891b2">📖</div>
-      <div class="section-title">Primer</div>
-      <div class="section-count">9 newsletters · Apr 7–30, 2026</div>
-    </div>
-    <div class="card">
-      <div class="analysis-report-body" style="padding:8px 0">
-        ${data.primer_html || '<div class="muted">Primer not available</div>'}
-      </div>
-    </div>
-
-    <div class="section-header" style="margin-top:22px">
-      <div class="section-icon" style="background:rgba(14,203,129,0.12);color:#0ECB81">📊</div>
-      <div class="section-title">Key Data Points</div>
-      <div class="section-count">${(data.charts || []).length} metrics</div>
-    </div>
-    <div class="card">
-      <table class="quick-table" style="width:100%">
-        <thead><tr><th style="width:35%">Metric</th><th style="width:35%">Value</th><th>Source</th></tr></thead>
-        <tbody>${chartRows}</tbody>
-      </table>
-    </div>
-
-    <div class="section-header" style="margin-top:22px">
-      <div class="section-icon" style="background:var(--amber-bg);color:var(--amber)">♺</div>
-      <div class="section-title">Recurring Themes</div>
-      <div class="section-count">${(data.themes || []).length} themes</div>
-    </div>
-    ${themesHtml}
-
-    <div class="section-header" style="margin-top:22px">
-      <div class="section-icon" style="background:var(--red-bg);color:var(--red)">🎯</div>
-      <div class="section-title">Follow-Up Topics</div>
-      <div class="section-count">${(data.followups || []).length} topics</div>
-    </div>
-    <div class="card">
-      <div class="watch-grid">${followupsHtml}</div>
+    <div style="margin-top:12px">
+      ${cardsHtml}
     </div>
   `;
 }
@@ -3503,10 +3539,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self.respond_json(report)
             elif path == "/api/mm":
-                data = parse_mm_primer()
-                if data is None:
-                    self.send_error(404, "MM primer not found")
-                    return
+                data = build_mm_newsletters()
                 self.respond_json(data)
             elif path == "/api/mm-primer":
                 content = read_text(MM_PRIMER_PATH)
