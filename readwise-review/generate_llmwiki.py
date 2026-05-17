@@ -75,7 +75,12 @@ def read_content(item):
     return ""
 
 def generate_summaries():
+    from datetime import datetime as _dt, timedelta as _td
+
     state = load_state()
+    
+    # Only process items from the last 7 days (avoid processing hundreds of old stale items)
+    cutoff = (_dt.now() - _td(days=7)).strftime('%Y-%m-%d')
     
     # Check ALL items — including ones with placeholder summaries
     todo = []
@@ -83,7 +88,9 @@ def generate_summaries():
         has_valid = ('summary' in item and item['summary'] and 
                      item['summary'].get('detailed_summary') and
                      '## 一、' in item['summary']['detailed_summary'])
-        if not has_valid:
+        pub = (item.get('published_date') or '')[:10]
+        # Only process if published within last 7 days
+        if not has_valid and pub >= cutoff:
             todo.append((i, item))
     
     total = len(todo)
