@@ -166,23 +166,26 @@ def generate_summaries():
             )
             if response.status_code == 401:
                 print(f'   ⚠️  401 AUTH FAILED — key: {MINIMAX_API_KEY[:15]}... len={len(MINIMAX_API_KEY)}')
-            # Handle both plain JSON and SSE responses
+            # Handle all possible response formats from 9router/Various providers
             raw = response.text.strip()
-            if raw.startswith('data:'):
-                # SSE format — extract last data: chunk
-                chunks = []
-                for line in raw.split('\n'):
-                    if line.startswith('data: '):
-                        chunks.append(line[6:])
-                if chunks:
-                    data = json.loads(chunks[-1])
-                elif '[DONE]' in raw:
-                    print(f'   ⏰ SSE stream done, no content')
-                    continue
+            
+            # Remove any trailing SSE termination markers
+            json_text = raw
+            for marker in ['\ndata: [DONE]', '\ndata:[DONE]', 'data: [DONE]', 'data:[DONE]']:
+                if json_text.endswith(marker):
+                    json_text = json_text[:-len(marker)].rstrip()
+            if '\ndata:' in json_text:
+                json_text = json_text.split('\ndata:')[0].rstrip()
+            
+            try:
+                data = json.loads(json_text)
+            except json.JSONDecodeError as e:
+                # Last resort: find the last complete JSON object
+                pos = json_text.rfind('}')
+                if pos >= 0:
+                    data = json.loads(json_text[:pos+1])
                 else:
-                    raise ValueError(f'Unknown SSE format: {raw[:200]}')
-            else:
-                data = json.loads(raw)
+                    raise
             output = data['choices'][0]['message']['content'].strip()
         except requests.exceptions.Timeout:
             print(f"⏰ timeout", flush=True)
