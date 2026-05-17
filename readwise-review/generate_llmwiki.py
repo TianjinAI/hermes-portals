@@ -6,11 +6,41 @@ Target format: In_Process style with YAML frontmatter + numbered sections.
 
 import json
 import os
+import requests
 import subprocess
 import sys
 import re
 import time
 from datetime import datetime
+from pathlib import Path
+
+# Load MINIMAX_API_KEY from ~/.hermes/.env
+_env_file = Path.home() / '.hermes' / '.env'
+if _env_file.exists():
+    for line in _env_file.read_text().splitlines():
+        line = line.strip()
+        if '=' in line and not line.startswith('#'):
+            k, v = line.split('=', 1)
+            if k not in os.environ:
+                os.environ[k] = v
+
+MINIMAX_API_KEY = os.environ.get('OPENCODE_API_KEY', '')
+if not MINIMAX_API_KEY:
+    env_file = os.path.expanduser('~/.hermes/.env')
+    if os.path.exists(env_file):
+        with open(env_file) as f:
+            for line in f:
+                if line.startswith('OPENCODE_API_KEY='):
+                    MINIMAX_API_KEY = line.strip().split('=', 1)[1]
+                    break
+if not MINIMAX_API_KEY:
+    env_file = os.path.expanduser('~/.env')
+    if os.path.exists(env_file):
+        with open(env_file) as f:
+            for line in f:
+                if line.startswith('OPENCODE_API_KEY='):
+                    MINIMAX_API_KEY = line.strip().split('=', 1)[1]
+                    break
 
 REVIEW_DIR = os.path.expanduser('~/.hermes/readwise_review')
 STATE_FILE = os.path.join(REVIEW_DIR, 'state.json')
@@ -66,6 +96,9 @@ def generate_summaries():
     for idx, (item_idx, item) in enumerate(todo):
         title = item.get('title', 'Untitled')[:200]
         content = read_content(item)
+        if len(content.strip()) < 20:
+            print(f'[{idx+1}/{total}] {title[:60]} — skipping, no content', flush=True)
+            continue
         url = item.get('url', '')
         author = item.get('author', 'Unknown')
         folder = item.get('folder', 'Other')
@@ -110,12 +143,26 @@ def generate_summaries():
         prompt += 'Content to analyze: ' + title + '\n\n' + content[:1200].strip()
 
         try:
-            result = subprocess.run(
-                ['claude', '-p', prompt, '--allowedTools', 'Read', '--max-turns', '5', '--effort', 'low'],
-                capture_output=True, text=True, timeout=120  # longer timeout for more complex output
+            response = requests.post(
+                'http://localhost:20128/v1/chat/completions',
+                headers={
+                    'Content-Type': 'application/json',
+                    'Authorization': f'Bearer {MINIMAX_API_KEY}'
+                },
+                json={
+                    'model': 'Best_China',
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'temperature': 0.7,
+                    'max_tokens': 2048
+                },
+                timeout=60
             )
-            output = (result.stdout or result.stderr or '').strip()
-        except subprocess.TimeoutExpired:
+            if response.status_code == 401:
+                print(f'   ⚠️  401 AUTH FAILED — key prefix: {MINIMAX_API_KEY[:15]}... len={len(MINIMAX_API_KEY)}, response: {response.text[:200]}')
+            response.raise_for_status()
+            data = response.json()
+            output = data['choices'][0]['message']['content'].strip()
+        except requests.exceptions.Timeout:
             print(f"⏰ timeout", flush=True)
             continue
         except Exception as e:
