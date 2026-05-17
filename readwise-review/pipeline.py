@@ -404,7 +404,9 @@ def main():
         if os.path.exists(script):
             # Run in background — subprocess pipe causes deadlocks with long-running LLM calls
             env = os.environ.copy()
-            env['HOME'] = str(Path.home())  # ensure .env is readable
+            # Ensure .env is readable for the background subprocess
+            env['HOME'] = '/home/admin'
+            env['OPENCODE_API_KEY'] = os.environ.get('OPENCODE_API_KEY', '')
             subprocess.Popen(
                 [sys.executable, script],
                 stdout=open(os.devnull, 'w'), stderr=open(os.devnull, 'w'),
