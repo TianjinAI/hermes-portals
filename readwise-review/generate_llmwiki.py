@@ -165,9 +165,24 @@ def generate_summaries():
                 timeout=60
             )
             if response.status_code == 401:
-                print(f'   ⚠️  401 AUTH FAILED — key prefix: {MINIMAX_API_KEY[:15]}... len={len(MINIMAX_API_KEY)}, response: {response.text[:200]}')
-            response.raise_for_status()
-            data = response.json()
+                print(f'   ⚠️  401 AUTH FAILED — key: {MINIMAX_API_KEY[:15]}... len={len(MINIMAX_API_KEY)}')
+            # Handle both plain JSON and SSE responses
+            raw = response.text.strip()
+            if raw.startswith('data:'):
+                # SSE format — extract last data: chunk
+                chunks = []
+                for line in raw.split('\n'):
+                    if line.startswith('data: '):
+                        chunks.append(line[6:])
+                if chunks:
+                    data = json.loads(chunks[-1])
+                elif '[DONE]' in raw:
+                    print(f'   ⏰ SSE stream done, no content')
+                    continue
+                else:
+                    raise ValueError(f'Unknown SSE format: {raw[:200]}')
+            else:
+                data = json.loads(raw)
             output = data['choices'][0]['message']['content'].strip()
         except requests.exceptions.Timeout:
             print(f"⏰ timeout", flush=True)
