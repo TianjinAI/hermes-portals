@@ -403,10 +403,12 @@ def main():
         script = os.path.join(REVIEW_DIR, 'generate_llmwiki.py')
         if os.path.exists(script):
             # Run in background — subprocess pipe causes deadlocks with long-running LLM calls
+            env = os.environ.copy()
+            env['HOME'] = str(Path.home())  # ensure .env is readable
             subprocess.Popen(
                 [sys.executable, script],
                 stdout=open(os.devnull, 'w'), stderr=open(os.devnull, 'w'),
-                cwd=REVIEW_DIR
+                cwd=REVIEW_DIR, env=env
             )
             print("(summary generation running in background — will update state on next run)")
         else:
