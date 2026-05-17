@@ -402,15 +402,13 @@ def main():
         print(f"\n📝 Generating llm-wiki summaries for {len(new_items)} new items...")
         script = os.path.join(REVIEW_DIR, 'generate_llmwiki.py')
         if os.path.exists(script):
-            result = subprocess.run(
+            # Run in background — subprocess pipe causes deadlocks with long-running LLM calls
+            subprocess.Popen(
                 [sys.executable, script],
-                capture_output=True, text=True, timeout=600
+                stdout=open(os.devnull, 'w'), stderr=open(os.devnull, 'w'),
+                cwd=REVIEW_DIR
             )
-            if result.returncode == 0:
-                print(result.stdout.strip().split('\n')[-1])
-                print("✅ Summaries generated successfully")
-            else:
-                print(f"⚠️ Summary generation failed: {result.stderr[:200]}")
+            print("(summary generation running in background — will update state on next run)")
         else:
             print(f"⚠️ generate_llmwiki.py not found at {script}")
 
