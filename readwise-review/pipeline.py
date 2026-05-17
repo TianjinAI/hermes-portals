@@ -229,6 +229,57 @@ def main():
     
     state = load_state()
     
+    # --- Orphan recovery: re-import items that are in processed_ids but missing from items[]
+    item_ids = {i["id"] for i in state["items"]}
+    orphaned = [did for did in state["processed_ids"] if did not in item_ids]
+    if orphaned:
+        print(f"\n⚠️  Found {len(orphaned)} orphaned doc_ids in processed_ids (no matching item)")
+        # Re-import these from the markdown files on disk
+        md_files = list(Path(EXPORT_DIR).rglob('*.md'))
+        fm_cache = {}
+        for fp in md_files:
+            try:
+                fm, _ = parse_frontmatter(fp)
+                doc_id = fm.get('document_id') or fm.get('id')
+                if not doc_id:
+                    parts = fp.stem.split('(')
+                    doc_id = parts[-1].rstrip(')') if len(parts) > 1 else fp.stem
+                if doc_id in orphaned:
+                    fm_cache[doc_id] = (fm, str(fp))
+            except Exception:
+                pass
+        recovered = 0
+        for doc_id in orphaned:
+            if doc_id in fm_cache:
+                fm, fp = fm_cache[doc_id]
+                # Re-import as a new item (append; pipeline.py already removed doc_id from processed_ids consideration above)
+                # We re-add it to items here as a recovery pass
+                fm2, body2 = parse_frontmatter(Path(fp))
+                title = fm2.get('title', 'Untitled')
+                is_youtube = 'youtube.com' in fm2.get('url', '') or 'youtu.be' in fm2.get('url', '')
+                item = {
+                    'id': doc_id,
+                    'title': title,
+                    'author': fm2.get('author', 'Unknown'),
+                    'category': fm2.get('category', 'unknown'),
+                    'folder': 'YouTube' if is_youtube else fm2.get('category', 'Other'),
+                    'url': fm2.get('url', ''),
+                    'published_date': fm2.get('published_date', ''),
+                    'has_transcript': False,
+                    'transcript_preview': None,
+                    'content': body2[:5000],
+                    'filepath': fp,
+                    'processed_at': fm2.get('saved_date', datetime.now(timezone.utc).isoformat())
+                }
+                state['items'].append(item)
+                recovered += 1
+                print(f"  ✅ Recovered: {title[:60]}")
+        print(f"  → {recovered}/{len(orphaned)} orphaned items recovered")
+        # Re-build processed_ids to match actual items (remove orphans from processed_ids too)
+        valid_ids = {i['id'] for i in state['items']}
+        state['processed_ids'] = [did for did in state['processed_ids'] if did in valid_ids]
+        print(f"  → Purged {len(orphaned)} orphaned doc_ids from processed_ids")
+    
     # Check for new items from export
     md_files = list(Path(EXPORT_DIR).rglob('*.md'))
     print(f"Found {len(md_files)} markdown files in export")
@@ -236,10 +287,33 @@ def main():
     new_items = []
     for filepath in md_files:
         filename = filepath.stem
-        doc_id = filename.split('(')[-1].rstrip(')') if '(' in filename else filename
-        
+        # Parse frontmatter to get document_id (canonical Readwise ID)
+        doc_id = None
+        try:
+            fm, _ = parse_frontmatter(filepath)
+            doc_id = fm.get('document_id') or fm.get('id')
+        except Exception:
+            pass
+        # Fallback: extract from filename — format is usually "Title (document_id)"
+        if not doc_id:
+            # Split on '(' and take the last segment as doc_id
+            parts = filename.split('(')
+            doc_id = parts[-1].rstrip(')') if len(parts) > 1 else filename
+            # Handle cases like "Title (extra) (document_id)" — doc_id is always the last ( part
+        # If still no valid doc_id, generate from content hash
+        if not doc_id or doc_id == filename:
+            import hashlib
+            doc_id = hashlib.md5(str(filepath).encode()).hexdigest()[:12]
+
         if doc_id in state['processed_ids']:
-            continue
+            # Check if item already exists AND has a summary — if so, skip entirely
+            existing = next((i for i in state['items'] if i.get('id') == doc_id), None)
+            if existing and existing.get('summary', {}).get('detailed_summary'):
+                continue
+            # Item was processed before but lacks a summary — re-import to refresh it
+            # (remove old entry so we can update it cleanly)
+            state['items'] = [i for i in state['items'] if i.get('id') != doc_id]
+            print(f"  🔄 Re-importing (no summary): {doc_id}")
         
         fm, body = parse_frontmatter(filepath)
         
