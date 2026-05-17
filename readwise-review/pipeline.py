@@ -285,6 +285,7 @@ def main():
     print(f"Found {len(md_files)} markdown files in export")
     
     new_items = []
+    today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     for filepath in md_files:
         filename = filepath.stem
         # Parse frontmatter to get document_id (canonical Readwise ID)
@@ -292,6 +293,12 @@ def main():
         try:
             fm, _ = parse_frontmatter(filepath)
             doc_id = fm.get('document_id') or fm.get('id')
+            # Date filter: only process files saved today
+            saved_date = fm.get('saved_date', '')
+            if saved_date:
+                file_date = saved_date[:10]  # Get YYYY-MM-DD portion
+                if file_date != today_str:
+                    continue
         except Exception:
             pass
         # Fallback: extract from filename — format is usually "Title (document_id)"
