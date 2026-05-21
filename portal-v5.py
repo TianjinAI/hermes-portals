@@ -704,7 +704,13 @@ def load_articles(date_str):
     try:
         import json
         with open(articles_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        # Support both formats: plain list or {"articles": [...]}
+        if isinstance(data, dict) and "articles" in data:
+            return data["articles"]
+        if isinstance(data, list):
+            return data
+        return None
     except Exception:
         return None
 
@@ -1822,8 +1828,8 @@ async function renderBrief() {
   const bottomLine = brief.bottom_line ? `<div class="card"><div class="section-header"><div class="section-icon" style="background:var(--purple-bg);color:var(--purple)">◎</div><div class="section-title">Bottom Line</div></div><div>${esc(brief.bottom_line)}</div></div>` : '';
   /* ---- Synthesized Articles (breaking headlines) ---- */
   const articlesData = data.articles || null;
-  const articles = articlesData ? articlesData.articles || [] : [];
-  const articlesGenerated = articlesData ? articlesData.generated_at : null;
+  const articles = Array.isArray(articlesData) ? articlesData : (articlesData && articlesData.articles) || [];
+  const articlesGenerated = articlesData && !Array.isArray(articlesData) ? articlesData.generated_at : null;
   _briefArticlesCache = articles;
   function stripMd(text, maxLen) {
     if (!text) return '';
@@ -1989,7 +1995,7 @@ async function renderFull() {
   const headlines = brief.headlines || [];
   const newsletters = data.newsletters || [];
   const articlesData = data.articles || null;
-  const articles = articlesData ? articlesData.articles || [] : [];
+  const articles = Array.isArray(articlesData) ? articlesData : (articlesData && articlesData.articles) || [];
 
   // ---- Direct article view (from Brief card click) ----
   if (selectedArticle !== null && selectedArticle >= 0 && selectedArticle < articles.length) {
@@ -3566,15 +3572,26 @@ def build_ai_news():
     for f in files[:7]:
         try:
             articles = json.loads(f.read_text(encoding="utf-8"))
+            file_date = f.stem.split("_")[0]  # e.g. "20260516"
             for a in articles:
                 key = a.get("url", a.get("title", ""))
                 if key and key not in seen:
                     seen.add(key)
+                    # Inject file_date as fallback sort key when published_at is empty
+                    a["_file_date"] = file_date
                     all_articles.append(a)
         except (json.JSONDecodeError, OSError):
             pass
     # Sort by published_at descending (newest first)
-    all_articles.sort(key=lambda a: a.get("published_at", ""), reverse=True)
+    # Use file mtime as fallback when published_at is missing/empty
+    # (LLM scorer may strip this field from scored articles)
+    def _sort_key(a):
+        dt = a.get("published_at", "")
+        if dt:
+            return dt
+        # fallback: use file's own date embedded in filename
+        return a.get("_file_date", "")
+    all_articles.sort(key=_sort_key, reverse=True)
     return {"articles": all_articles, "dates": dates, "latest_date": dates[0] if dates else None}
 
 
