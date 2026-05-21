@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import time
 from collections import Counter, defaultdict
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -454,6 +455,27 @@ def compute_trend(day_counts):
     return compute_trend_split(day_counts)
 
 
+DIGEST_PATH = DATA_DIR / "intel" / "digest.json"
+
+
+def load_intel_digest(max_age_hours=6):
+    """Load LLM-generated intelligence digest if fresh, else return None."""
+    import json as _json
+    if not DIGEST_PATH.exists():
+        return None
+    try:
+        stat = DIGEST_PATH.stat()
+        age = time.monotonic() - (stat.st_mtime - time.time())
+        # Approximate: check file age in seconds
+        file_age = datetime.utcnow().timestamp() - stat.st_mtime
+        if file_age > max_age_hours * 3600:
+            return None
+        with open(DIGEST_PATH, "r", encoding="utf-8") as f:
+            return _json.load(f)
+    except Exception:
+        return None
+
+
 def build_intelligence():
     kb, known_entities = load_known_entities()
     briefs = []
@@ -652,13 +674,26 @@ def build_intelligence():
                 "score": best_score,
             })
 
-    return {
+    result = {
         "hot_topics": hot_topics,
         "topic_of_the_day": topic_of_the_day,
         "trends": trends,
         "insights": insights,
         "stats": stats,
     }
+
+    # Include LLM-generated digest if available (theme-centric intelligence)
+    digest = load_intel_digest(max_age_hours=6)
+    if digest:
+        result["digest"] = {
+            "executive_summary": digest.get("executive_summary", ""),
+            "themes": digest.get("themes", []),
+            "generated_at": digest.get("generated_at", ""),
+            "briefs_analyzed": digest.get("briefs_analyzed", 0),
+            "date_range": digest.get("date_range", {}),
+        }
+
+    return result
 
 
 def get_nl_color(newsletter_type):
@@ -704,7 +739,13 @@ def load_articles(date_str):
     try:
         import json
         with open(articles_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        # Support both formats: plain list or {"articles": [...]}
+        if isinstance(data, dict) and "articles" in data:
+            return data["articles"]
+        if isinstance(data, list):
+            return data
+        return None
     except Exception:
         return None
 
@@ -1822,8 +1863,8 @@ async function renderBrief() {
   const bottomLine = brief.bottom_line ? `<div class="card"><div class="section-header"><div class="section-icon" style="background:var(--purple-bg);color:var(--purple)">◎</div><div class="section-title">Bottom Line</div></div><div>${esc(brief.bottom_line)}</div></div>` : '';
   /* ---- Synthesized Articles (breaking headlines) ---- */
   const articlesData = data.articles || null;
-  const articles = articlesData ? articlesData.articles || [] : [];
-  const articlesGenerated = articlesData ? articlesData.generated_at : null;
+  const articles = Array.isArray(articlesData) ? articlesData : (articlesData && articlesData.articles) || [];
+  const articlesGenerated = articlesData && !Array.isArray(articlesData) ? articlesData.generated_at : null;
   _briefArticlesCache = articles;
   function stripMd(text, maxLen) {
     if (!text) return '';
@@ -1989,7 +2030,7 @@ async function renderFull() {
   const headlines = brief.headlines || [];
   const newsletters = data.newsletters || [];
   const articlesData = data.articles || null;
-  const articles = articlesData ? articlesData.articles || [] : [];
+  const articles = Array.isArray(articlesData) ? articlesData : (articlesData && articlesData.articles) || [];
 
   // ---- Direct article view (from Brief card click) ----
   if (selectedArticle !== null && selectedArticle >= 0 && selectedArticle < articles.length) {
@@ -2246,155 +2287,261 @@ function toggleExpand(el) {
 
 async function renderIntel() {
   document.getElementById('content').innerHTML = '<div class="loading">Loading intelligence report...</div>';
-  var res = await fetch('/api/intel-report');
+  var res = await fetch('/api/intel');
   var data = await res.json();
-  var themes = data.themes || [];
+  var hotTopics = data.hot_topics || [];
+  var insights = data.insights || [];
+  var trends = data.trends || [];
+  var stats = data.stats || {};
+  var topicOfDay = data.topic_of_the_day || [];
+  var digest = data.digest || null;
 
-  if (data.error) {
-    document.getElementById('content').innerHTML = '<div class="empty">' + esc(data.error) + '</div>';
+  // Use LLM-generated theme-centric digest if available
+  if (digest && digest.themes && digest.themes.length > 0) {
+    return renderIntelDigest(digest, stats);
+  }
+
+  // Fallback: algorithmic intelligence (old format)
+  if (hotTopics.length === 0) {
+    document.getElementById('content').innerHTML = '<div class="empty">No intelligence data. Need brief files.</div>';
     return;
   }
 
-  if (themes.length === 0) {
-    document.getElementById('content').innerHTML = '<div class="empty">No themes found. Run: python3 scripts/build_intel_report.py</div>';
-    return;
-  }
-
-  var severityColors = {
-    5: {bg: '#7f1d1d', text: '#fca5a5', label: 'CRITICAL'},
-    4: {bg: '#7c2d12', text: '#fdba74', label: 'HIGH'},
-    3: {bg: '#713f12', text: '#fde047', label: 'ELEVATED'},
-    2: {bg: '#1e3a5f', text: '#93c5fd', label: 'MODERATE'},
-    1: {bg: '#1a2e1a', text: '#86efac', label: 'LOW'}
+  var heatColors = {
+    'High': {bg: '#7c2d12', text: '#fdba74', label: 'HIGH'},
+    'Medium': {bg: '#713f12', text: '#fde047', label: 'MEDIUM'},
+    'Low': {bg: '#1e3a5f', text: '#93c5fd', label: 'LOW'},
+    'Emerging': {bg: '#1a2e1a', text: '#86efac', label: 'EMERGING'}
   };
 
-  var sectorIcons = {
-    'Geopolitical': String.fromCharCode(0xD83C, 0xDF0D),
-    'Energy': String.fromCharCode(0x26FD),
-    'Technology': String.fromCharCode(0xD83D, 0xDCBB),
-    'Finance': String.fromCharCode(0xD83D, 0xDCB0),
-    'Central Banks': String.fromCharCode(0xD83C, 0xDFE6),
-    'Emerging Markets': String.fromCharCode(0xD83C, 0xDF10),
-    'Crypto': String.fromCharCode(0x20BF),
-    'Trade': String.fromCharCode(0xD83D, 0xDCE8),
-    'Defense': String.fromCharCode(0xD83D, 0xDEE1, 0xFE0F),
-    'Regulation': String.fromCharCode(0x2696, 0xFE0F),
-    'Corporate': String.fromCharCode(0xD83C, 0xDFE2),
-    'Climate': String.fromCharCode(0xD83C, 0xDF32)
+  var trendIcons = {
+    'rising': '↑',
+    'falling': '↓',
+    'stable': '→',
+    'neutral': '→'
   };
-
-  // Group themes by sector
-  var sectors = {};
-  for (var i = 0; i < themes.length; i++) {
-    var sector = themes[i].sector || 'Other';
-    if (!sectors[sector]) sectors[sector] = [];
-    sectors[sector].push(themes[i]);
-  }
 
   // Header
   var html = '<div style="margin-bottom:20px">';
   html += '<div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">';
-  html += '<div style="font-size:22px;font-weight:700;color:var(--text)">Intel Report</div>';
+  html += '<div style="font-size:22px;font-weight:700;color:var(--text)">Intelligence Report</div>';
   html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
-  html += '<div style="font-size:11px;color:var(--text-muted)">' + esc(data.date_range || '') + '</div>';
+  html += '<div style="font-size:11px;color:var(--text-muted)">' + esc((stats.date_range || {}).start || '') + ' to ' + esc((stats.date_range || {}).end || '') + '</div>';
   html += '</div>';
   html += '<div style="display:flex;gap:12px;flex-wrap:wrap">';
-  html += '<span style="font-size:11px;color:var(--text-muted)">' + (data.total_newsletters || 0) + ' newsletters</span>';
-  html += '<span style="font-size:11px;color:var(--text-muted)">' + (data.days_analyzed || 0) + ' days</span>';
-  html += '<span style="font-size:11px;color:var(--text-muted)">' + themes.length + ' themes</span>';
-  html += '<span style="font-size:11px;color:var(--text-muted)">' + Object.keys(sectors).length + ' sectors</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">' + (stats.brief_days || 0) + ' brief days</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">' + (stats.headlines_analyzed || 0) + ' headlines</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">' + hotTopics.length + ' hot topics</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">' + (stats.topics_analyzed || 0) + ' topics analyzed</span>';
   html += '</div></div>';
 
-  // Sector grid (2 columns)
+  // Insights section
+  if (insights.length > 0) {
+    html += '<div style="margin-bottom:20px">';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px">💡 Key Insights</div>';
+    for (var i = 0; i < insights.length; i++) {
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">';
+      html += '<div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px">' + esc(insights[i].topic) + '</div>';
+      html += '<div style="font-size:12px;color:var(--text);line-height:1.5">' + esc(insights[i].text) + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Hot topics grid
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
 
-  var sectorNames = Object.keys(sectors);
-  for (var si = 0; si < sectorNames.length; si++) {
-    var sectorName = sectorNames[si];
-    var sectorThemes = sectors[sectorName];
-    var icon = sectorIcons[sectorName] || '📌';
+  for (var i = 0; i < hotTopics.length; i++) {
+    var topic = hotTopics[i];
+    var heat = heatColors[topic.heat_level] || heatColors['Medium'];
+    var articles = topic.related_articles || [];
 
-    // Sector box
     html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">';
 
-    // Sector header
+    // Topic header
     html += '<div style="padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">';
-    html += '<span style="font-size:16px">' + icon + '</span>';
-    html += '<span style="font-size:14px;font-weight:700;color:var(--text)">' + esc(sectorName) + '</span>';
-    html += '<span style="font-size:10px;color:var(--text-muted);margin-left:auto">' + sectorThemes.length + ' theme' + (sectorThemes.length > 1 ? 's' : '') + '</span>';
+    html += '<div style="min-width:32px;height:32px;border-radius:6px;background:' + heat.bg + ';display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0">';
+    html += '<div style="font-size:12px;font-weight:800;color:' + heat.text + '">' + topic.days_appeared + 'd</div>';
+    html += '</div>';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--text)">' + esc(topic.topic) + '</div>';
+    html += '<div style="font-size:11px;color:var(--text-muted)">' + topic.article_count + ' articles · Score ' + topic.score + ' · Trend ' + trendIcons[topic.trend] + ' ' + topic.trend + '</div>';
+    html += '</div>';
+    html += '<span style="font-size:10px;color:' + heat.text + ';background:' + heat.bg + ';padding:2px 6px;border-radius:4px;font-weight:600">' + heat.label + '</span>';
     html += '</div>';
 
-    // Themes within sector
-    for (var ti = 0; ti < sectorThemes.length; ti++) {
-      var theme = sectorThemes[ti];
-      var sev = theme.severity || 3;
-      var sc = severityColors[sev] || severityColors[3];
-      var articles = theme.related_articles || [];
-
-      // Group articles by date
-      var byDate = {};
-      for (var j = 0; j < articles.length; j++) {
-        var d = articles[j].date || 'unknown';
-        if (!byDate[d]) byDate[d] = [];
-        byDate[d].push(articles[j]);
+    // Related entities
+    if (topic.related_entities && topic.related_entities.length > 0) {
+      html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border)">';
+      html += '<span style="font-size:10px;color:var(--text-muted)">Entities: </span>';
+      for (var ei = 0; ei < topic.related_entities.length; ei++) {
+        html += '<span style="font-size:10px;color:var(--accent);background:var(--surface-alt);padding:1px 5px;border-radius:3px;margin-right:4px">' + esc(topic.related_entities[ei]) + '</span>';
       }
-      var sortedDates = Object.keys(byDate).sort();
-
-      var isLast = (ti === sectorThemes.length - 1);
-      html += '<div style="padding:12px 16px' + (isLast ? '' : ';border-bottom:1px solid var(--border)') + '">';
-
-      // Theme header row
-      html += '<div style="display:flex;align-items:flex-start;gap:10px">';
-      html += '<div style="min-width:32px;height:32px;border-radius:6px;background:' + sc.bg + ';display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0">';
-      html += '<div style="font-size:14px;font-weight:800;color:' + sc.text + ';line-height:1\">' + sev + '</div>';
       html += '</div>';
-      html += '<div style="flex:1;min-width:0">';
-      html += '<div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">' + esc(theme.name) + '</div>';
-      html += '<div style="font-size:11px;color:var(--text-muted);line-height:1.5">' + esc(theme.analysis || '') + '</div>';
-      html += '</div>';
-      html += '</div>';
+    }
 
-      // Related articles (collapsible)
-      html += '<details style="margin-top:8px">';
-      html += '<summary style="cursor:pointer;font-size:11px;color:var(--accent);font-weight:500;list-style:none;padding:4px 0">';
-      html += '▶ ' + articles.length + ' articles across ' + sortedDates.length + ' days';
-      html += '</summary>';
-      html += '<div style="margin-top:8px;padding-left:42px">';
-
-      for (var di = 0; di < sortedDates.length; di++) {
-        var dateKey = sortedDates[di];
-        var dayArticles = byDate[dateKey];
-        html += '<div style="margin-bottom:8px">';
-        html += '<div style="font-size:10px;font-weight:600;color:var(--accent);font-family:var(--mono);margin-bottom:3px">' + esc(dateKey) + '</div>';
-        for (var ai = 0; ai < dayArticles.length; ai++) {
-          var art = dayArticles[ai];
-          html += '<div style="margin-bottom:6px">';
-          html += '<div style="font-size:11px;font-weight:600;color:var(--text)">' + esc(art.subject || '') + '</div>';
-          if (art.excerpt) {
-            html += '<div style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:2px">' + esc(art.excerpt) + '</div>';
-          } else if (art.preview) {
-            html += '<div style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:2px">' + esc(art.preview) + '</div>';
-          }
-          if (art.urls && art.urls.length > 0) {
-            html += '<div style="margin-top:4px">';
-            for (var ui = 0; ui < art.urls.length; ui++) {
-              html += '<a href="' + esc(art.urls[ui]) + '" target="_blank" style="font-size:10px;color:var(--accent);text-decoration:none;margin-right:8px">' + String.fromCharCode(0xD83D, 0xDD17) + ' Read on Bloomberg</a>';
-            }
-            html += '</div>';
-          }
-          html += '</div>';
+    // Connections
+    if (topic.connections && topic.connections.length > 0) {
+      html += '<div style="padding:8px 16px;border-bottom:1px solid var(--border)">';
+      html += '<span style="font-size:10px;color:var(--text-muted)">Connected: </span>';
+      for (var ci = 0; ci < topic.connections.length; ci++) {
+        var conn = topic.connections[ci];
+        html += '<span style="font-size:10px;color:var(--accent);margin-right:8px">' + esc(conn.topic);
+        if (conn.shared_entities && conn.shared_entities.length > 0) {
+          html += ' (' + esc(conn.shared_entities.join(', ')) + ')';
         }
+        html += '</span>';
+      }
+      html += '</div>';
+    }
+
+    // Related articles (collapsible)
+    if (articles.length > 0) {
+      html += '<details style="margin:0">';
+      html += '<summary style="cursor:pointer;font-size:11px;color:var(--accent);font-weight:500;list-style:none;padding:10px 16px;border-bottom:1px solid var(--border)">';
+      html += '▶ ' + articles.length + ' articles';
+      html += '</summary>';
+      html += '<div style="padding:10px 16px">';
+
+      for (var ai = 0; ai < articles.length; ai++) {
+        var art = articles[ai];
+        html += '<div style="margin-bottom:8px">';
+        html += '<div style="font-size:11px;font-weight:600;color:var(--text)">' + esc(art.title || '') + '</div>';
+        if (art.context) {
+          html += '<div style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:2px">' + esc(art.context.substring(0, 120)) + (art.context.length > 120 ? '...' : '') + '</div>';
+        }
+        html += '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">' + esc(art.date || '') + ' · Rank #' + (art.rank || '?') + '</div>';
         html += '</div>';
       }
 
       html += '</div></details>';
-      html += '</div>';
     }
 
     html += '</div>';
   }
 
   html += '</div>';
+
+  // Trends section
+  if (trends.length > 0) {
+    html += '<div style="margin-top:20px">';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px">📈 Trends</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">';
+    for (var ti = 0; ti < trends.length; ti++) {
+      var tr = trends[ti];
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px">';
+      html += '<div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(tr.topic) + '</div>';
+      html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">' + trendIcons[tr.direction] + ' ' + tr.direction + ' · ' + tr.recent + ' recent / ' + tr.earlier + ' earlier</div>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+  }
+
+  // Topic of the day
+  if (topicOfDay.length > 0) {
+    html += '<div style="margin-top:20px">';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px">📅 Topic of the Day</div>';
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+    var recentTod = topicOfDay.slice(-14);
+    for (var tdi = 0; tdi < recentTod.length; tdi++) {
+      var tod = recentTod[tdi];
+      html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px">';
+      html += '<span style="color:var(--text-muted)">' + esc(tod.date.substring(5)) + '</span> ';
+      html += '<span style="font-weight:600;color:var(--text)">' + esc(tod.topic) + '</span>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+  }
+
+  document.getElementById('content').innerHTML = html;
+}
+
+
+async function renderIntelDigest(digest, stats) {
+  var themes = digest.themes || [];
+  var summary = digest.executive_summary || '';
+
+  var html = '<div style="margin-bottom:20px">';
+
+  // Header
+  html += '<div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">';
+  html += '<div style="font-size:22px;font-weight:700;color:var(--text)">Intelligence Digest</div>';
+  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
+  html += '<div style="font-size:11px;color:var(--text-muted)">LLM · ' + (digest.date_range.start || '') + ' to ' + (digest.date_range.end || '') + '</div>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap">';
+  html += '<span style="font-size:11px;color:var(--text-muted)">📄 ' + (digest.briefs_analyzed || 0) + ' briefs analyzed</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">🎯 ' + themes.length + ' themes</span>';
+  html += '<span style="font-size:11px;color:var(--text-muted)">🕐 ' + esc(digest.generated_at || '') + '</span>';
+  html += '</div></div>';
+
+  // Executive Summary
+  if (summary) {
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:20px">';
+    html += '<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px">📋 Executive Summary</div>';
+    html += '<div style="font-size:13px;color:var(--text);line-height:1.7">' + esc(summary).replace(/\\n/g, '<br>') + '</div>';
+    html += '</div>';
+  }
+
+  // Themes
+  for (var i = 0; i < themes.length; i++) {
+    var theme = themes[i];
+    var rel = (theme.relevance || 'MEDIUM').toUpperCase();
+    var relColor = rel === 'HIGH' ? '#fdba74' : rel === 'EMERGING' ? '#86efac' : '#fde047';
+    var relBg = rel === 'HIGH' ? '#7c2d12' : rel === 'EMERGING' ? '#1a2e1a' : '#713f12';
+
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden">';
+
+    // Theme header
+    html += '<div style="padding:14px 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:15px;font-weight:700;color:var(--text)">' + esc(theme.name) + '</div>';
+    html += '</div>';
+    html += '<span style="font-size:10px;font-weight:700;color:' + relColor + ';background:' + relBg + ';padding:3px 8px;border-radius:4px;flex-shrink:0">' + rel + '</span>';
+    html += '</div>';
+
+    // Synthesis
+    if (theme.synthesis) {
+      html += '<div style="padding:12px 16px;border-bottom:1px solid var(--border)">';
+      html += '<div style="font-size:13px;color:var(--text);line-height:1.7">' + esc(theme.synthesis).replace(/\\n/g, '<br>') + '</div>';
+      html += '</div>';
+    }
+
+    // Highlights
+    var highlights = theme.highlights || [];
+    if (highlights.length > 0) {
+      html += '<div style="padding:10px 16px;border-bottom:1px solid var(--border)">';
+      html += '<div style="font-size:10px;font-weight:600;color:var(--text-muted);margin-bottom:6px">KEY HIGHLIGHTS</div>';
+      html += '<ul style="margin:0;padding-left:16px;font-size:12px;color:var(--text);line-height:1.6">';
+      for (var hi = 0; hi < highlights.length; hi++) {
+        html += '<li>' + esc(highlights[hi]) + '</li>';
+      }
+      html += '</ul></div>';
+    }
+
+    // Substantiating articles
+    var articles = theme.articles || [];
+    if (articles.length > 0) {
+      html += '<details style="margin:0">';
+      html += '<summary style="cursor:pointer;font-size:11px;color:var(--accent);font-weight:500;list-style:none;padding:10px 16px;border-bottom:1px solid var(--border)">';
+      html += '▶ ' + articles.length + ' substantiating articles';
+      html += '</summary>';
+      html += '<div style="padding:10px 16px 14px">';
+      for (var ai = 0; ai < articles.length; ai++) {
+        var art = articles[ai];
+        html += '<div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border-light)">';
+        html += '<div style="font-size:12px;font-weight:600;color:var(--text)">' + esc(art.headline || art.title || '') + '</div>';
+        if (art.date) {
+          html += '<div style="font-size:10px;color:var(--text-muted);margin-top:3px">📅 ' + esc(art.date) + '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div></details>';
+    }
+
+    html += '</div>';
+  }
+
   document.getElementById('content').innerHTML = html;
 }
 
@@ -3564,22 +3711,28 @@ def build_ai_news():
     all_articles = []
     seen = set()
     for f in files[:7]:
-        file_date = f.stem.split("_")[0]  # e.g. "20260515"
-        file_date_iso = f"{file_date[:4]}-{file_date[4:6]}-{file_date[6:8]}T12:00:00Z"
         try:
             articles = json.loads(f.read_text(encoding="utf-8"))
+            file_date = f.stem.split("_")[0]  # e.g. "20260516"
             for a in articles:
                 key = a.get("url", a.get("title", ""))
                 if key and key not in seen:
                     seen.add(key)
-                    # Fallback: use file date if published_at is empty (MiniMax strips it)
-                    if not a.get("published_at"):
-                        a["published_at"] = file_date_iso
+                    # Inject file_date as fallback sort key when published_at is empty
+                    a["_file_date"] = file_date
                     all_articles.append(a)
         except (json.JSONDecodeError, OSError):
             pass
     # Sort by published_at descending (newest first)
-    all_articles.sort(key=lambda a: a.get("published_at", ""), reverse=True)
+    # Use file mtime as fallback when published_at is missing/empty
+    # (LLM scorer may strip this field from scored articles)
+    def _sort_key(a):
+        dt = a.get("published_at", "")
+        if dt:
+            return dt
+        # fallback: use file's own date embedded in filename
+        return a.get("_file_date", "")
+    all_articles.sort(key=_sort_key, reverse=True)
     return {"articles": all_articles, "dates": dates, "latest_date": dates[0] if dates else None}
 
 

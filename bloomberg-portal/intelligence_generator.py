@@ -129,11 +129,15 @@ def extract_hot_topics(summaries, knowledge_base):
         if count > 0:
             topic_counts[theme] += count
     
-    # Get top topics
+    # Get top topics — ONLY from categories (which have article attachments)
     hot_topics = []
     for topic, count in topic_counts.most_common(10):
         if count >= 2:  # At least 2 mentions
             articles = topic_articles.get(topic, [])
+            
+            # Skip word-frequency noise: must have actual articles
+            if not articles:
+                continue
             
             # Generate insight
             insight = generate_insight(topic, articles, knowledge_base)
@@ -266,9 +270,9 @@ def main():
     
     # Load data
     knowledge_base = load_knowledge_base()
-    summaries = load_recent_summaries(days=7)
+    summaries = load_recent_summaries(days=14)
     
-    print(f"Loaded {len(summaries)} summaries from last 7 days")
+    print(f"Loaded {len(summaries)} summaries from last 14 days")
     print(f"Knowledge base: {len(knowledge_base.get('themes', {}))} themes")
     
     # Generate insights
