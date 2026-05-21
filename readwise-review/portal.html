@@ -518,7 +518,7 @@ body {
 <script>
 let state = { items: [], decisions: {}, history_count: 0 };
 let currentFilter = 'pending';
-let currentDate = new Date().toISOString().split('T')[0];
+let currentDate = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
 async function loadState() {
   try {
@@ -544,6 +544,39 @@ async function loadDate() {
   } catch (e) {
     console.error('Failed to load date:', e);
   }
+}
+
+// Strip markdown to plain text for readable previews
+function stripMarkdown(md) {
+  if (!md) return '';
+  return md
+    // Remove images ![alt](url)
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    // Remove links [text](url) -> keep text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Remove HTML tags
+    .replace(/<[^>]+>/g, '')
+    // Remove code blocks
+    .replace(/```[\s\S]*?```/g, '')
+    // Remove inline code
+    .replace(/`([^`]+)`/g, '$1')
+    // Remove bold/italic
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    // Remove headings
+    .replace(/^#{1,6}\s+/gm, '')
+    // Remove blockquotes
+    .replace(/^>\s*/gm, '')
+    // Remove horizontal rules
+    .replace(/^---+$/gm, '')
+    // Remove list markers
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    // Clean up extra whitespace
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 async function makeDecision(itemId, decision) {
@@ -709,7 +742,7 @@ function render() {
           </div>
           <div class="detailed-content" id="detailed-${item.id}">
             <div class="detailed-summary">
-              ${summary.detailed_summary_html || summary.detailed_summary.replace(/\n/g, '<br>')}
+              ${summary.detailed_summary_html || stripMarkdown(summary.detailed_summary).replace(/\n/g, '<br>')}
             </div>
           </div>
         ` : ''}

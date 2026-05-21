@@ -11,9 +11,10 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-REVIEW_DIR = os.path.expanduser('~/.hermes/readwise_review')
+# ⚠️ Absolute path required — systemd sets HOME=/home/admin/.hermes/profiles/tg-bot-c/home
+REVIEW_DIR = "/home/admin/.hermes/readwise_review"
 STATE_FILE = os.path.join(REVIEW_DIR, 'state.json')
-EXPORT_DIR = os.path.expanduser('~/.hermes/readwise_export/reader_md')
+EXPORT_DIR = "/home/admin/.hermes/readwise_export/reader_md"
 YOUMIND_SCRIPT = os.path.join(REVIEW_DIR, 'youmind_transcript.py')
 
 def load_state():

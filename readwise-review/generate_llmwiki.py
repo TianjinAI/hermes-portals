@@ -42,7 +42,8 @@ if not MINIMAX_API_KEY:
                     MINIMAX_API_KEY = line.strip().split('=', 1)[1]
                     break
 
-REVIEW_DIR = os.path.expanduser('~/.hermes/readwise_review')
+# ⚠️ Absolute path required — systemd sets HOME=/home/admin/.hermes/profiles/tg-bot-c/home
+REVIEW_DIR = "/home/admin/.hermes/readwise_review"
 STATE_FILE = os.path.join(REVIEW_DIR, 'state.json')
 
 def load_state():
@@ -79,8 +80,8 @@ def generate_summaries():
 
     state = load_state()
     
-    # Only process items from the last 7 days (avoid processing hundreds of old stale items)
-    cutoff = (_dt.now() - _td(days=7)).strftime('%Y-%m-%d')
+    # Only process items from TODAY — never process historical backlog
+    cutoff = _dt.now().strftime('%Y-%m-%d')
     
     # Check ALL items — including ones with placeholder summaries
     todo = []
@@ -169,24 +170,50 @@ def generate_summaries():
             # Handle all possible response formats from 9router/Various providers
             raw = response.text.strip()
             
-            # Remove any trailing SSE termination markers
+            # Remove trailing SSE termination markers
             json_text = raw
             for marker in ['\ndata: [DONE]', '\ndata:[DONE]', 'data: [DONE]', 'data:[DONE]']:
                 if json_text.endswith(marker):
                     json_text = json_text[:-len(marker)].rstrip()
-            if '\ndata:' in json_text:
-                json_text = json_text.split('\ndata:')[0].rstrip()
             
-            try:
-                data = json.loads(json_text)
-            except json.JSONDecodeError as e:
-                # Last resort: find the last complete JSON object
-                pos = json_text.rfind('}')
-                if pos >= 0:
-                    data = json.loads(json_text[:pos+1])
-                else:
-                    raise
-            output = data['choices'][0]['message']['content'].strip()
+            # Check if this is pure SSE (starts with data:) — extract content from last delta
+            if json_text.startswith('data:'):
+                # Pure SSE stream — each line is data: <JSON>
+                # Collect all delta content, ignoring control lines
+                content_chunks = []
+                for line in json_text.split('\n'):
+                    stripped = line.strip()
+                    if stripped.startswith('data: ') and not stripped.startswith('data: [DONE]'):
+                        try:
+                            chunk_data = json.loads(stripped[6:])
+                            delta = chunk_data.get('choices', [{}])[0].get('delta', {})
+                            if delta.get('content'):
+                                content_chunks.append(delta['content'])
+                        except (json.JSONDecodeError, IndexError, KeyError):
+                            pass  # skip malformed chunk lines
+                output = ''.join(content_chunks)
+                data = {'choices': [{'message': {'content': output}}]}
+            elif '\ndata:' in json_text:
+                # Hybrid: JSON body then SSE stream — take JSON part only
+                json_text = json_text.split('\ndata:')[0].rstrip()
+                try:
+                    data = json.loads(json_text)
+                except json.JSONDecodeError:
+                    pos = json_text.rfind('}')
+                    data = json.loads(json_text[:pos+1]) if pos >= 0 else {}
+                output = (data.get('choices', [{}])[0].get('message', {}).get('content') or '').strip()
+                data = {'choices': [{'message': {'content': output}}]}
+            else:
+                # Plain JSON response
+                try:
+                    data = json.loads(json_text)
+                except json.JSONDecodeError:
+                    pos = json_text.rfind('}')
+                    data = json.loads(json_text[:pos+1]) if pos >= 0 else {}
+                output = (data.get('choices', [{}])[0].get('message', {}).get('content') or '').strip()
+                data = {'choices': [{'message': {'content': output}}]}
+            
+            output = output.strip()
         except requests.exceptions.Timeout:
             print(f"⏰ timeout", flush=True)
             continue
