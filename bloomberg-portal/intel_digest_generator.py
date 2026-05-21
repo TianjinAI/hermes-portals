@@ -23,7 +23,7 @@ BRIEFS_DIR = Path(BLOOMBERG_DIR) / "briefs"
 DIGEST_FILE = INTEL_DIR / "digest.json"
 
 LLM_URL = "http://localhost:20128/v1/chat/completions"
-LLM_MODEL = "Best_China"
+LLM_MODEL = "Power_Max"
 
 
 def get_api_key():
