@@ -734,8 +734,16 @@ def load_intel_timeline():
 
 
 def load_intel_report():
-    """Load the pre-built Intel Report (cross-day thematic analysis)."""
+    """Load the LLM-generated Intel Digest (digest.json) or fall back to algorithmic report."""
     import json
+    # Prefer LLM digest over algorithmic report — user explicitly wants thematic synthesis
+    digest_path = DATA_DIR / "intel" / "digest.json"
+    if digest_path.exists():
+        try:
+            with open(digest_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass  # fall through to report.json on read error
     report_path = DATA_DIR / "intel" / "report.json"
     if not report_path.exists():
         return {"error": "Report not built. Run: python3 scripts/build_intel_report.py", "themes": []}
@@ -2250,6 +2258,83 @@ function toggleExpand(el) {
   }
 }
 
+function renderIntelDigest(data) {
+  var themes = data.themes || [];
+  var dr = data.date_range || {};
+  var html = '<div style="max-width:900px;margin:0 auto;padding:16px">';
+  
+  // Header
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">';
+  html += '<div style="font-size:24px;font-weight:700;color:var(--text)">Intel Digest</div>';
+  html += '<div style="flex:1;height:1px;background:var(--border)"></div>';
+  html += '<div style="font-size:11px;color:var(--text-muted)">' + esc(dr.start || '') + ' &ndash; ' + esc(dr.end || '') + '</div>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:12px;margin-bottom:16px;font-size:11px;color:var(--text-muted)">';
+  html += '<span>' + (data.briefs_analyzed || 0) + ' briefs analyzed</span>';
+  html += '<span>' + themes.length + ' themes</span>';
+  html += '<span>Generated ' + (data.generated_at || '').replace('T', ' ').substring(0, 16) + '</span>';
+  html += '</div>';
+
+  // Executive Summary
+  html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">';
+  html += '<div style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:8px">Executive Summary</div>';
+  html += '<div style="font-size:13px;color:var(--text);line-height:1.7">' + esc(data.executive_summary || '') + '</div>';
+  html += '</div>';
+
+  // Themes
+  for (var i = 0; i < themes.length; i++) {
+    var t = themes[i];
+    html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">';
+    
+    // Theme header
+    html += '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px">' + esc(t.name || '') + '</div>';
+    if (t.relevance) {
+      html += '<div style="font-size:12px;color:var(--accent);margin-bottom:8px;font-style:italic">' + esc(t.relevance) + '</div>';
+    }
+    
+    // Synthesis
+    if (t.synthesis) {
+      html += '<div style="font-size:13px;color:var(--text);line-height:1.7;margin-bottom:12px">' + esc(t.synthesis) + '</div>';
+    }
+    
+    // Highlights
+    if (t.highlights && t.highlights.length > 0) {
+      html += '<div style="margin-bottom:10px">';
+      html += '<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Key Highlights</div>';
+      for (var h = 0; h < t.highlights.length; h++) {
+        html += '<div style="display:flex;gap:8px;margin-bottom:4px">';
+        html += '<span style="color:var(--accent);flex-shrink:0">&#9656;</span>';
+        html += '<span style="font-size:12px;color:var(--text);line-height:1.5">' + esc(t.highlights[h]) + '</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    
+    // Articles
+    if (t.articles && t.articles.length > 0) {
+      html += '<details style="margin-top:8px">';
+      html += '<summary style="cursor:pointer;font-size:12px;color:var(--accent);font-weight:500;padding:4px 0">';
+      html += '&#9654; ' + t.articles.length + ' related articles';
+      html += '</summary>';
+      html += '<div style="margin-top:8px;padding-left:12px;border-left:2px solid var(--border)">';
+      for (var a = 0; a < t.articles.length; a++) {
+        var art = t.articles[a];
+        html += '<div style="margin-bottom:6px">';
+        html += '<span style="font-size:10px;color:var(--text-muted);font-family:var(--mono)">' + esc(art.date || '') + '</span>';
+        html += '<div style="font-size:12px;color:var(--text);line-height:1.5">' + esc(art.headline || '') + '</div>';
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '</details>';
+    }
+    
+    html += '</div>';
+  }
+  
+  html += '</div>';
+  document.getElementById('content').innerHTML = html;
+}
+
 async function renderIntel() {
   document.getElementById('content').innerHTML = '<div class="loading">Loading intelligence report...</div>';
   var res = await fetch('/api/intel-report');
@@ -2259,6 +2344,11 @@ async function renderIntel() {
   if (data.error) {
     document.getElementById('content').innerHTML = '<div class="empty">' + esc(data.error) + '</div>';
     return;
+  }
+
+  // Check if this is the LLM digest format (has executive_summary) or algorithmic format
+  if (data.executive_summary) {
+    return renderIntelDigest(data);
   }
 
   if (themes.length === 0) {

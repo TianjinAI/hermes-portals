@@ -546,39 +546,6 @@ async function loadDate() {
   }
 }
 
-// Strip markdown to plain text for readable previews
-function stripMarkdown(md) {
-  if (!md) return '';
-  return md
-    // Remove images ![alt](url)
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
-    // Remove links [text](url) -> keep text
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    // Remove HTML tags
-    .replace(/<[^>]+>/g, '')
-    // Remove code blocks
-    .replace(/```[\s\S]*?```/g, '')
-    // Remove inline code
-    .replace(/`([^`]+)`/g, '$1')
-    // Remove bold/italic
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/_([^_]+)_/g, '$1')
-    // Remove headings
-    .replace(/^#{1,6}\s+/gm, '')
-    // Remove blockquotes
-    .replace(/^>\s*/gm, '')
-    // Remove horizontal rules
-    .replace(/^---+$/gm, '')
-    // Remove list markers
-    .replace(/^[-*+]\s+/gm, '')
-    .replace(/^\d+\.\s+/gm, '')
-    // Clean up extra whitespace
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
 async function makeDecision(itemId, decision) {
   try {
     const resp = await fetch('/api/decide', {
@@ -643,8 +610,7 @@ function getFilteredItems() {
     items = items.filter(i => decisions[i.id] === 'investigate');
   } else if (['email', 'rss', 'youtube', 'podcast', 'article'].includes(currentFilter)) {
     items = items.filter(i => i.category === currentFilter || 
-      (currentFilter === 'youtube' && (i.category === 'video' || (i.url || '').includes('youtube'))) ||
-      (currentFilter === 'rss' && i.category === 'rss' && !(i.url || '').includes('youtube')));
+      (currentFilter === 'youtube' && i.category === 'video'));
   } else if (currentFilter === 'history') {
     items = []; // History is loaded separately
   }
@@ -734,7 +700,6 @@ function render() {
           <span>${item.author}</span>
           <span>${item.published_date ? new Date(item.published_date).toLocaleDateString('zh-CN') : ''}</span>
         </div>
-        <div class="item-summary">${summary.summary || '等待处理...'}</div>
         
         ${summary.detailed_summary ? `
           <div class="toggle-detailed" onclick="toggleDetailed('${item.id}')">
@@ -742,7 +707,7 @@ function render() {
           </div>
           <div class="detailed-content" id="detailed-${item.id}">
             <div class="detailed-summary">
-              ${stripMarkdown(summary.detailed_summary).replace(/\n/g, '<br>')}
+              ${summary.detailed_summary_html || summary.detailed_summary.replace(/\n/g, '<br>')}
             </div>
           </div>
         ` : ''}

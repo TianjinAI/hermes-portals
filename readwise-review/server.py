@@ -14,10 +14,7 @@ import urllib.parse
 from datetime import datetime
 
 PORT = 5054
-REVIEW_DIR = "/home/admin/.hermes/readwise_review"
-# ⚠️ Absolute path required — server runs under systemd with HOME=/home/admin/.hermes/profiles/tg-bot-c/home
-# which causes os.path.expanduser('~/.hermes/readwise_review') to resolve to the WRONG directory.
-# All other scripts (pipeline.py, generate_llmwiki.py) use this absolute path. Keep consistent.
+REVIEW_DIR = os.path.expanduser('~/.hermes/readwise_review')
 STATE_FILE = os.path.join(REVIEW_DIR, 'state.json')
 IGNORE_FILE = os.path.join(REVIEW_DIR, 'ignore_list.json')
 VAULT_PATH = os.path.expanduser('~/Second_Brain')
@@ -81,12 +78,7 @@ def filter_items(items):
         category = item.get('category', '')
         
         # Keep all YouTube items if configured
-        is_youtube = (
-            category in ['youtube', 'video'] or
-            item.get('folder', '') == 'YouTube' or
-            'youtube' in item.get('url', '').lower()
-        )
-        if keep_all_youtube and is_youtube:
+        if keep_all_youtube and category in ['youtube', 'video']:
             filtered.append(item)
             continue
         
@@ -161,12 +153,7 @@ class PortalHandler(BaseHTTPRequestHandler):
             # Filter by date if provided
             date = query_params.get('date', [None])[0]
             if date:
-                # Fall back to saved_date when published_date is empty
-                def item_date(i):
-                    pd = i.get('published_date') or ''
-                    sd = i.get('saved_date') or ''
-                    return pd if pd else sd
-                items = [i for i in state['items'] if item_date(i).startswith(date)]
+                items = [i for i in state['items'] if i.get('published_date', '').startswith(date)]
             else:
                 items = state['items']
             

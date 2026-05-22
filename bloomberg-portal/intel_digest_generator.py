@@ -1,216 +1,194 @@
 #!/usr/bin/env python3
 """
-Bloomberg Intelligence Digest Generator
-========================================
-Reads Bloomberg daily briefs from the last 14 days, calls LLM (Power_Max via 9Router)
-to synthesize standout themes with analytical depth, and saves to intel/digest.json.
+Intel Digest Generator — LLM-powered thematic intelligence digest.
+Generates digest.json from Bloomberg briefs using Deepseek API.
 
-Usage:
-    python3 intel_digest_generator.py              # Process latest briefs
-    python3 intel_digest_generator.py --days 7     # Override lookback window
+Usage: python3 intel_digest_generator.py [--days 14] [--output intel/digest.json]
+
+Schedule: Friday-only (US CDT morning = ~14:00 UTC)
+           2-week lookback window (--days 14)
 """
-
+import argparse
 import json
 import os
 import re
+import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-BLOOMBERG_DIR = os.path.expanduser("~/.hermes/bloomberg_digest")
-INTEL_DIR = Path(BLOOMBERG_DIR) / "intel"
-BRIEFS_DIR = Path(BLOOMBERG_DIR) / "briefs"
-DIGEST_FILE = INTEL_DIR / "digest.json"
+# ─── Config ──────────────────────────────────────────────────────────────
+BASE_DIR = Path(os.path.expanduser("~/.hermes/bloomberg_digest"))
+BRIEFS_DIR = BASE_DIR / "briefs"
+INTEL_DIR = BASE_DIR / "intel"
+DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
-LLM_URL = "http://localhost:20128/v1/chat/completions"
-LLM_MODEL = "Power_Max"
-
+# ─── Helpers ──────────────────────────────────────────────────────────────
 
 def get_api_key():
-    """Read 9Router API key from .env."""
-    env_path = Path.home() / ".hermes" / ".env"
-    if env_path.exists():
-        for line in env_path.read_text().split("\n"):
-            if line.startswith("OPENCODE_API_KEY="):
-                key = line.split("=", 1)[1].strip().strip('"').strip("'")
-                if key and key != "***":
-                    return key
-    return os.environ.get("OPENCODE_API_KEY", "")
+    env_path = Path("/home/admin/.hermes/.env")
+    with open(env_path) as f:
+        for line in f:
+            if line.startswith("DEEPSEEK_API_KEY="):
+                return line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+    raise RuntimeError("DEEPSEEK_API_KEY not found in .env")
 
 
-def load_briefs(days=14):
-    """Load brief markdown files from the last N days, newest first."""
+def llm_call(prompt: str, max_tokens: int = 12288) -> str:
+    """Call Deepseek API for structured generation."""
+    api_key = get_api_key()
+    messages = [
+        {"role": "system", "content": "You are a senior macro intelligence analyst. You produce structured JSON digests that are accurate, data-rich, and actionable. Never invent data — only synthesize from provided sources."},
+        {"role": "user", "content": prompt}
+    ]
+
+    payload = json.dumps({
+        "model": "deepseek-chat",
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.1,
+        "stream": False,
+    })
+
+    result = subprocess.run(
+        ["curl", "-s", "--max-time", "180", "-X", "POST", DEEPSEEK_URL,
+         "-H", f"Authorization: Bearer {api_key}",
+         "-H", "Content-Type: application/json",
+         "-d", payload],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=200
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"curl failed: {result.stderr}")
+    data = json.loads(result.stdout.strip())
+    if "error" in data:
+        raise RuntimeError(f"API error: {data['error']}")
+    return data["choices"][0]["message"].get("content", "")
+
+
+def read_briefs(days: int) -> list[dict]:
+    """Read brief markdown files from the last N days."""
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days)
     briefs = []
-    md_files = sorted(BRIEFS_DIR.glob("*.md"))
-    # Take the most recent `days` files (skip weekends = fewer than calendar days)
-    for path in md_files[-days:]:
-        text = path.read_text(encoding="utf-8").strip()
-        if len(text) < 50:
-            continue  # Skip near-empty files
-        briefs.append({"date": path.stem, "path": str(path), "text": text})
+    for md_file in sorted(BRIEFS_DIR.rglob("*.md")):
+        date_str = md_file.stem
+        try:
+            file_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if file_date >= cutoff:
+            content = md_file.read_text(encoding="utf-8")
+            if len(content.strip()) > 100:  # Skip tiny/empty briefs
+                briefs.append({"date": date_str, "content": content[:4000]})
     return briefs
 
 
-def build_prompt(briefs):
-    """Build the synthesis prompt from brief content."""
-    lines = []
-    lines.append(
-        "You are a senior macro research analyst at a top hedge fund. "
-        "Review the Bloomberg daily briefs below and synthesize an intelligence report.\n"
-        "Identify 5-8 standout THEMES — not keyword buckets or categories, but real narrative threads that cut across multiple briefs.\n"
-        "For each theme provide:\n"
-        "  - name: punchy, specific theme title (e.g., 'AI IPO Mega-Wave Reshapes Equity Markets')\n"
-        "  - relevance: HIGH | MEDIUM | EMERGING\n"
-        "  - synthesis: 2-3 paragraph analytical summary — what is happening, why it matters, what is the trajectory\n"
-        "  - highlights: 3-5 bullet-point key takeaways\n"
-        "  - articles: 3-6 specific headlines from the briefs that substantiate this theme, with date and full headline text\n\n"
-        "Also produce:\n"
-        "  - executive_summary: 1-2 paragraph top-level narrative of the overall market/intelligence landscape across all briefs\n\n"
-        "Output ONLY valid JSON. No markdown fences. No explanation. Structure:\n"
-        '{\n'
-        '  "executive_summary": "...",\n'
-        '  "themes": [\n'
-        '    {\n'
-        '      "name": "...",\n'
-        '      "relevance": "HIGH",\n'
-        '      "synthesis": "...",\n'
-        '      "highlights": ["...", "..."],\n'
-        '      "articles": [{"date": "YYYY-MM-DD", "headline": "..."}]\n'
-        '    }\n'
-        '  ]\n'
-        '}\n\n'
-        "=== DAILY BRIEFS ===\n"
+def build_prompt(briefs: list[dict], date_range: str) -> str:
+    """Build the prompt for Intel digest generation."""
+    brief_text = "\n\n".join(
+        f"### {b['date']}\n{b['content']}" for b in briefs
     )
-    for brief in briefs:
-        lines.append(f"\n--- {brief['date']} ---\n")
-        # Truncate very long briefs to avoid context overflow
-        text = brief["text"]
-        if len(text) > 1500:
-            text = text[:1500] + "\n...[truncated]..."
-        lines.append(text)
-    lines.append("\n=== END OF BRIEFS ===\n")
-    return "\n".join(lines)
+    prompt = f"""You are an intelligence analyst producing a weekly briefing for senior decision-makers.
 
+Analyze the following Bloomberg daily briefs from {date_range} and synthesize a thematic intelligence digest.
 
-def call_llm(prompt: str, max_tokens=4096, temperature=0.3) -> str:
-    """Call Power_Max via 9Router HTTP API using curl (no requests dependency)."""
-    import subprocess
-    import json as json_mod
+{brief_text}
 
-    api_key = get_api_key()
-    if not api_key:
-        raise RuntimeError("OPENCODE_API_KEY not found in .env or environment")
+---
 
-    payload = {
-        "model": LLM_MODEL,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a senior macro research analyst. "
-                    "You synthesize market intelligence from daily briefs. "
-                    "Always output valid JSON ONLY. No markdown fences, no commentary, no explanation. "
-                    "Do NOT wrap output in ```json or ``` blocks. Raw JSON only."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": temperature,
-        "max_tokens": 12288,
-        "stream": False,
-    }
+Generate a JSON response with this exact structure:
+{{
+  "executive_summary": "A 3-5 sentence executive summary covering the most important cross-cutting themes from this period.",
+  "themes": [
+    {{
+      "name": "Theme name (e.g., 'Hormuz Crisis Reshapes Global Energy Markets')",
+      "relevance": "Why this theme matters to investors/policymakers right now (1-2 sentences)",
+      "synthesis": "A 3-4 paragraph synthesis connecting all related developments across the lookback period. Identify pattern shifts, inflection points, and what's changed.",
+      "highlights": [
+        "3-5 bullet-point highlights, each a complete sentence of market-relevant insight"
+      ],
+      "articles": [
+        {{"date": "YYYY-MM-DD", "headline": "Key article headline from that day's brief"}},
+        ...
+      ]
+    }},
+    ... (5-8 themes, ordered by importance)
+  ],
+  "generated_at": "ISO timestamp",
+  "briefs_analyzed": N,
+  "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}
+}}
 
-    payload_bytes = json_mod.dumps(payload).encode("utf-8")
-    result = subprocess.run(
-        [
-            "curl", "-s", LLM_URL,
-            "-H", "Content-Type: application/json; charset=utf-8",
-            "-H", "Authorization: Bearer " + api_key,
-            "-d", "@-",
-            "--max-time", "120",
-        ],
-        input=payload_bytes,
-        capture_output=True,
-        timeout=130,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"curl failed: {result.stderr.decode('utf-8', errors='replace')[:200]}")
-    data = json_mod.loads(result.stdout)
-    content = (
-        data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    ).strip()
-    # Debug: if content empty, dump raw response
-    if not content:
-        msg = data.get("choices", [{}])[0].get("message", {})
-        print(f"[DEBUG] Empty content. Raw message keys: {list(msg.keys())}", file=sys.stderr)
-        print(f"[DEBUG] Full response: {json_mod.dumps(data, indent=2)[:2000]}", file=sys.stderr)
-        return "{}"
-    # Strip any reasoning tokens if they leak
-    content = re.sub(r"<\|.*?\|>", "", content, flags=re.DOTALL)
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-    # Strip markdown code fences
-    if content.startswith("```"):
-        content = re.sub(r"^```(?:json)?\s*", "", content)
-        content = re.sub(r"\s*```$", "", content)
-    return content
+Guidelines:
+- Themes must be MACRO-RELEVANT: markets, geopolitics, monetary policy, energy, technology, trade
+- No filler themes. Every theme must be actionable for investment decisions.
+- Synthesis should connect dots across dates — show the arc of the story, not isolated events.
+- Highlights must be punchy and data-rich, not generic observations.
+- Articles must reference actual headlines from the briefs, not invented.
+- Return ONLY valid JSON. No markdown, no code fences, no preamble."""
+    return prompt
 
 
 def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Generate intelligence digest from briefs")
-    parser.add_argument("--days", type=int, default=14, help="Lookback window (default: 14)")
-    parser.add_argument("--dry-run", action="store_true", help="Print prompt only, do not call LLM")
+    parser = argparse.ArgumentParser(description="Generate Intel digest from Bloomberg briefs")
+    parser.add_argument("--days", type=int, default=14, help="Lookback window in days")
+    parser.add_argument("--output", type=str, default=str(INTEL_DIR / "digest.json"),
+                        help="Output path for digest JSON")
     args = parser.parse_args()
 
-    print(f"Loading briefs from {BRIEFS_DIR} (last {args.days} days)...")
-    briefs = load_briefs(days=args.days)
-    print(f"Loaded {len(briefs)} briefs")
+    INTEL_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Read briefs
+    briefs = read_briefs(args.days)
     if not briefs:
-        print("No briefs found. Exiting.")
-        sys.exit(0)
-
-    prompt = build_prompt(briefs)
-
-    if args.dry_run:
-        print("=== PROMPT ===")
-        print(prompt)
-        print("=== END PROMPT ===")
-        print(f"Prompt length: {len(prompt)} chars, ~{len(prompt)//4} tokens")
-        return
-
-    print(f"Calling LLM ({LLM_MODEL}) — this takes 15-60s...")
-    try:
-        content = call_llm(prompt)
-    except Exception as e:
-        print(f"LLM call failed: {e}", file=sys.stderr)
+        print("No briefs found in lookback window. Exiting.")
         sys.exit(1)
+
+    dates = sorted(b['date'] for b in briefs)
+    date_range_str = f"{dates[0]} to {dates[-1]}"
+    print(f"Read {len(briefs)} briefs from {date_range_str}")
+
+    # Generate digest
+    prompt = build_prompt(briefs, date_range_str)
+
+    print("Generating Intel digest via Deepseek... (this may take 2-4 min)")
+    response = llm_call(prompt, max_tokens=12288)
 
     # Parse and validate JSON
+    response = response.strip()
+    # Strip markdown code fences if present
+    if response.startswith("```"):
+        lines = response.split("\n")
+        response = "\n".join(lines[1:])  # Remove first fence line
+        if response.endswith("```"):
+            response = response[:-3].strip()
+    if response.endswith("```"):
+        response = response[:-3].strip()
+
     try:
-        digest = json.loads(content)
-    except json.JSONDecodeError as e:
-        print(f"JSON parse error: {e}", file=sys.stderr)
-        print(f"First 500 chars of response:\n{content[:500]}", file=sys.stderr)
-        sys.exit(1)
+        digest = json.loads(response)
+    except json.JSONDecodeError:
+        # Try to extract JSON from within the response
+        match = re.search(r'\{.*\}', response, re.DOTALL)
+        if match:
+            digest = json.loads(match.group(0))
+        else:
+            print(f"Failed to parse JSON. Raw response: {response[:500]}")
+            sys.exit(1)
 
     # Add metadata
-    digest["generated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    digest["generated_at"] = datetime.now(timezone.utc).isoformat()
     digest["briefs_analyzed"] = len(briefs)
-    digest["date_range"] = {
-        "start": briefs[0]["date"] if briefs else None,
-        "end": briefs[-1]["date"] if briefs else None,
-    }
+    digest["date_range"] = {"start": dates[0], "end": dates[-1]}
 
-    # Save
-    INTEL_DIR.mkdir(parents=True, exist_ok=True)
-    DIGEST_FILE.write_text(json.dumps(digest, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"Digest saved to {DIGEST_FILE}")
-    print(f"Themes: {len(digest.get('themes', []))}")
-    for theme in digest.get("themes", []):
-        art_count = len(theme.get("articles", []))
-        print(f"  - {theme['name']} ({theme.get('relevance', '?')}) · {art_count} articles")
+    # Write output
+    with open(args.output, "w", encoding="utf-8") as f:
+        json.dump(digest, f, indent=2, ensure_ascii=False)
+
+    print(f"Intel digest saved to {args.output}")
+    print(f"  Themes: {len(digest.get('themes', []))}")
+    print(f"  Briefs analyzed: {digest['briefs_analyzed']}")
+    print(f"  Date range: {digest['date_range']['start']} to {digest['date_range']['end']}")
 
 
 if __name__ == "__main__":

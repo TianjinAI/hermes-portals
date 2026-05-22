@@ -1,80 +1,61 @@
 #!/usr/bin/env python3
 """
-Generate llm-wiki format summaries for portal items using claude -p.
+Generate llm-wiki format summaries for portal items using 9Router/Power_Light.
 Target format: In_Process style with YAML frontmatter + numbered sections.
 """
 
 import json
 import os
-import requests
-import subprocess
-import sys
 import re
 import time
 from datetime import datetime
 from pathlib import Path
 
-# Load MINIMAX_API_KEY from ~/.hermes/.env
-_env_file = Path.home() / '.hermes' / '.env'
-if _env_file.exists():
-    for line in _env_file.read_text().splitlines():
-        line = line.strip()
-        if '=' in line and not line.startswith('#'):
-            k, v = line.split('=', 1)
-            if k not in os.environ:
-                os.environ[k] = v
-
-MINIMAX_API_KEY = os.environ.get('OPENCODE_API_KEY', '')
-if not MINIMAX_API_KEY:
-    env_file = os.path.expanduser('~/.hermes/.env')
-    if os.path.exists(env_file):
-        with open(env_file) as f:
-            for line in f:
-                if line.startswith('OPENCODE_API_KEY='):
-                    MINIMAX_API_KEY = line.strip().split('=', 1)[1]
-                    break
-if not MINIMAX_API_KEY:
-    env_file = os.path.expanduser('~/.env')
-    if os.path.exists(env_file):
-        with open(env_file) as f:
-            for line in f:
-                if line.startswith('OPENCODE_API_KEY='):
-                    MINIMAX_API_KEY = line.strip().split('=', 1)[1]
-                    break
-
-# ⚠️ Absolute path required — systemd sets HOME=/home/admin/.hermes/profiles/tg-bot-c/home
-REVIEW_DIR = "/home/admin/.hermes/readwise_review"
+REVIEW_DIR = os.path.expanduser('~/.hermes/readwise_review')
 STATE_FILE = os.path.join(REVIEW_DIR, 'state.json')
+API_URL = "https://api.deepseek.com/v1/chat/completions"
 
-LLM_MODEL = "Power_Max"  # non-reasoning, clean output — never use Best_China (unstable 9Router alias)
-LLM_TEMPERATURE = 0.7
-LLM_MAX_TOKENS = 2048
 
-def is_summary_garbage(detailed_summary: str) -> bool:
-    """Reject summaries that contain raw email markdown, tracking links, or hallucinated stubs."""
-    if not detailed_summary or len(detailed_summary.strip()) < 300:
-        return True
-    # Stub filler — LLM had no real content to work with
-    if 'This item centers on' in detailed_summary and 'useful for later synthesis' in detailed_summary:
-        return True
-    # Raw markdown images from email bodies (never valid in a summary)
-    if '![' in detailed_summary:
-        return True
-    # Tracking/email links that indicate raw email HTML leaked through
-    bad_patterns = [
-        'yardeniquicktakes.com/r/',
-        'storage.ghost.io/',
-        'images.unsplash.com/',
-        'reader-forwarded-email/',
-    ]
-    for bp in bad_patterns:
-        if bp in detailed_summary:
-            return True
-    # Excessive URL count (>10 links in summary = raw content, not analysis)
-    url_count = detailed_summary.count('http')
-    if url_count > 10:
-        return True
-    return False
+def get_api_key():
+    env_path = Path("/home/admin/.hermes/.env")
+    if env_path.exists():
+        for line in env_path.read_text().split("\n"):
+            if line.startswith("DEEPSEEK_API_KEY="):
+                key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                if key and key != "***":
+                    return key
+    return os.environ.get("DEEPSEEK_API_KEY", "")
+
+
+def call_llm(prompt: str, max_tokens: int = 4000) -> str:
+    """Call Deepseek API directly (non-streaming JSON)."""
+    import json, subprocess
+
+    api_key = get_api_key()
+    if not api_key:
+        raise RuntimeError("DEEPSEEK_API_KEY not found")
+
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": max_tokens,
+        "stream": False
+    }
+
+    result = subprocess.run(
+        ["curl", "-s", "--max-time", "120", "-X", "POST", API_URL,
+         "-H", f"Authorization: Bearer {api_key}",
+         "-H", "Content-Type: application/json; charset=utf-8",
+         "-d", json.dumps(payload, ensure_ascii=False)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=125
+    )
+    data = json.loads(result.stdout.strip())
+    msg = data["choices"][0]["message"]
+    content = msg.get("content") or ""
+    if not content:
+        raise RuntimeError(f"No content in response: {json.dumps(msg)[:200]}")
+    return content
 
 def load_state():
     with open(STATE_FILE) as f:
@@ -84,25 +65,14 @@ def save_state(state):
     with open(STATE_FILE, 'w') as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
-def clean_input_text(text: str) -> str:
-    """Strip email boilerplate, tracking links, images, and raw markdown before LLM."""
-    if not text:
-        return ''
-    text = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', text)  # markdown images
-    text = re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', text)  # markdown links keep anchor text
-    text = re.sub(r'https?://\S+', '', text)  # raw urls
-    text = re.sub(r'View in browser|Unsubscribe|Manage preferences|Photo by.*', '', text, flags=re.I)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip()
-
 def read_content(item):
     """Get content preview for an item."""
-    fp = item.get('filepath', '') or item.get('file_path', '')
+    fp = item.get('filepath', '')
     has_t = item.get('has_transcript', False)
     if has_t and item.get('transcript_preview'):
-        return clean_input_text(item['transcript_preview'])[:2000]
+        return item['transcript_preview'][:2000]
     if 'content' in item and item['content']:
-        return clean_input_text(item['content'])[:2000]
+        return item['content'][:2000]
     if fp and os.path.exists(fp):
         try:
             with open(fp, 'r', encoding='utf-8') as f:
@@ -111,33 +81,63 @@ def read_content(item):
                 end = text.find('---', 3)
                 if end != -1:
                     text = text[end+3:].strip()
-            return clean_input_text(text)[:2000]
+            return text[:2000]
         except:
             pass
     return ""
 
 def generate_summaries():
-    from datetime import datetime as _dt, timedelta as _td
-
     state = load_state()
     
-    # Only process items from TODAY — never process historical backlog
-    cutoff = _dt.now().strftime('%Y-%m-%d')
+    # DELTA-ONLY by default. Backfill mode via BACKFILL_ALL=1.
+    fix_date = os.environ.get('FIX_DATE', '')
+    backfill_all = os.environ.get('BACKFILL_ALL', '0') == '1'
+    if backfill_all:
+        cutoff = None
+        print("BACKFILL mode: processing all items with invalid/missing llm-wiki summaries")
+    elif fix_date:
+        cutoff = datetime.strptime(fix_date, '%Y-%m-%d')
+        print(f"FIX mode: processing items from {fix_date}")
+    else:
+        cutoff = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # Check ALL items — including ones with placeholder summaries
     todo = []
     for i, item in enumerate(state['items']):
-        has_valid = ('summary' in item and item['summary'] and
+        # Check if already has valid summary
+        has_valid = ('summary' in item and item['summary'] and 
                      item['summary'].get('detailed_summary') and
-                     '## 一、' in item['summary']['detailed_summary'] and
-                     not is_summary_garbage(item['summary']['detailed_summary']))
-        pub = (item.get('published_date') or '')[:10]
-        # Only process if published within last 7 days
-        if not has_valid and pub >= cutoff:
-            todo.append((i, item))
+                     '## 一、' in item['summary']['detailed_summary'])
+        if has_valid:
+            continue
+        
+        # Check if item was processed today (or on FIX_DATE)
+        proc_at = item.get('processed_at', '')
+        if proc_at:
+            try:
+                dt = datetime.fromisoformat(proc_at.replace('Z', '+00:00'))
+                item_date = dt.strftime('%Y-%m-%d')
+                if fix_date:
+                    if item_date != fix_date:
+                        continue
+                else:
+                    if cutoff is not None and dt.replace(tzinfo=None) < cutoff:
+                        # Skip items from before today
+                        continue
+            except:
+                pass
+        
+        todo.append((i, item))
     
     total = len(todo)
     print(f"Need llm-wiki format summaries for {total} items", flush=True)
+    
+    # Batch limit support for incremental cron runs
+    batch_limit = int(os.environ.get('BATCH_LIMIT', '0'))
+    if batch_limit > 0 and total > batch_limit:
+        todo = todo[:batch_limit]
+        total = batch_limit
+        print(f"Batch mode: processing {total} items (BATCH_LIMIT={batch_limit})", flush=True)
+    
     if total == 0:
         print("All items already in llm-wiki format!")
         return
@@ -146,9 +146,6 @@ def generate_summaries():
     for idx, (item_idx, item) in enumerate(todo):
         title = item.get('title', 'Untitled')[:200]
         content = read_content(item)
-        if len(content.strip()) < 20:
-            print(f'[{idx+1}/{total}] {title[:60]} — skipping, no content', flush=True)
-            continue
         url = item.get('url', '')
         author = item.get('author', 'Unknown')
         folder = item.get('folder', 'Other')
@@ -187,83 +184,13 @@ def generate_summaries():
         lang_instruction = 'Use ' + lang + ' throughout the note.'
         
         prompt = 'You are a curator. Generate a structured llm-wiki note. ' + lang_instruction + '\n\n'
-        prompt += 'NON-NEGOTIABLE QUALITY RULES:\n'
-        prompt += '- Do NOT copy raw email HTML, markdown image syntax, tracking URLs, or boilerplate.\n'
-        prompt += '- Do NOT invent generic filler like "This item centers on..." when source detail is thin.\n'
-        prompt += '- If source content is thin, summarize only what title/source clearly supports and say evidence is limited.\n'
-        prompt += '- Output must be analysis, not a pasted source excerpt.\n\n'
         prompt += 'Start with EXACTLY:\n'
         prompt += '---\nsource: ' + url + '\nauthor: ' + author + '\ncreated: ' + pub_date + '\ntype: ' + content_type + '\ntags: [' + tags_hint + ']\nstatus: pending\n---\n\n'
         prompt += 'Then H1 title, then > 摘要：summary in ' + lang + ', then ---, then ## 一、 (Chinese-numbered, 3 sections minimum, 3-5 paragraphs each), then > [!info] 来源 with 原始链接.\n\n'
         prompt += 'Content to analyze: ' + title + '\n\n' + content[:1200].strip()
 
         try:
-            response = requests.post(
-                'http://localhost:20128/v1/chat/completions',
-                headers={
-                    'Content-Type': 'application/json',
-                    'Authorization': f'Bearer {MINIMAX_API_KEY}'
-                },
-                json={
-                    'model': LLM_MODEL,
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'temperature': LLM_TEMPERATURE,
-                    'max_tokens': LLM_MAX_TOKENS
-                },
-                timeout=60
-            )
-            if response.status_code == 401:
-                print(f'   ⚠️  401 AUTH FAILED — key: {MINIMAX_API_KEY[:15]}... len={len(MINIMAX_API_KEY)}')
-            # Handle all possible response formats from 9router/Various providers
-            raw = response.text.strip()
-            
-            # Remove trailing SSE termination markers
-            json_text = raw
-            for marker in ['\ndata: [DONE]', '\ndata:[DONE]', 'data: [DONE]', 'data:[DONE]']:
-                if json_text.endswith(marker):
-                    json_text = json_text[:-len(marker)].rstrip()
-            
-            # Check if this is pure SSE (starts with data:) — extract content from last delta
-            if json_text.startswith('data:'):
-                # Pure SSE stream — each line is data: <JSON>
-                # Collect all delta content, ignoring control lines
-                content_chunks = []
-                for line in json_text.split('\n'):
-                    stripped = line.strip()
-                    if stripped.startswith('data: ') and not stripped.startswith('data: [DONE]'):
-                        try:
-                            chunk_data = json.loads(stripped[6:])
-                            delta = chunk_data.get('choices', [{}])[0].get('delta', {})
-                            if delta.get('content'):
-                                content_chunks.append(delta['content'])
-                        except (json.JSONDecodeError, IndexError, KeyError):
-                            pass  # skip malformed chunk lines
-                output = ''.join(content_chunks)
-                data = {'choices': [{'message': {'content': output}}]}
-            elif '\ndata:' in json_text:
-                # Hybrid: JSON body then SSE stream — take JSON part only
-                json_text = json_text.split('\ndata:')[0].rstrip()
-                try:
-                    data = json.loads(json_text)
-                except json.JSONDecodeError:
-                    pos = json_text.rfind('}')
-                    data = json.loads(json_text[:pos+1]) if pos >= 0 else {}
-                output = (data.get('choices', [{}])[0].get('message', {}).get('content') or '').strip()
-                data = {'choices': [{'message': {'content': output}}]}
-            else:
-                # Plain JSON response
-                try:
-                    data = json.loads(json_text)
-                except json.JSONDecodeError:
-                    pos = json_text.rfind('}')
-                    data = json.loads(json_text[:pos+1]) if pos >= 0 else {}
-                output = (data.get('choices', [{}])[0].get('message', {}).get('content') or '').strip()
-                data = {'choices': [{'message': {'content': output}}]}
-            
-            output = output.strip()
-        except requests.exceptions.Timeout:
-            print(f"⏰ timeout", flush=True)
-            continue
+            output = call_llm(prompt).strip()
         except Exception as e:
             print(f"❌ {e}", flush=True)
             continue
@@ -281,12 +208,6 @@ def generate_summaries():
             else:
                 note = output
         
-        # Reject hallucinated/raw-email outputs before saving
-        if is_summary_garbage(note):
-            print(f"⚠️  garbage output rejected (raw links/images/stub detected)", flush=True)
-            print(f"   Output preview: {note[:200]}", flush=True)
-            continue
-
         # Verify it has the required structure
         has_yaml = note.startswith('---')
         has_sections = bool(re.search(r'## [一二三四五六七八九十\d]+[、.]', note))
