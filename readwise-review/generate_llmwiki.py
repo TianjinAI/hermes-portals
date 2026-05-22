@@ -46,6 +46,36 @@ if not MINIMAX_API_KEY:
 REVIEW_DIR = "/home/admin/.hermes/readwise_review"
 STATE_FILE = os.path.join(REVIEW_DIR, 'state.json')
 
+LLM_MODEL = "Power_Max"  # non-reasoning, clean output — never use Best_China (unstable 9Router alias)
+LLM_TEMPERATURE = 0.7
+LLM_MAX_TOKENS = 2048
+
+def is_summary_garbage(detailed_summary: str) -> bool:
+    """Reject summaries that contain raw email markdown, tracking links, or hallucinated stubs."""
+    if not detailed_summary or len(detailed_summary.strip()) < 300:
+        return True
+    # Stub filler — LLM had no real content to work with
+    if 'This item centers on' in detailed_summary and 'useful for later synthesis' in detailed_summary:
+        return True
+    # Raw markdown images from email bodies (never valid in a summary)
+    if '![' in detailed_summary:
+        return True
+    # Tracking/email links that indicate raw email HTML leaked through
+    bad_patterns = [
+        'yardeniquicktakes.com/r/',
+        'storage.ghost.io/',
+        'images.unsplash.com/',
+        'reader-forwarded-email/',
+    ]
+    for bp in bad_patterns:
+        if bp in detailed_summary:
+            return True
+    # Excessive URL count (>10 links in summary = raw content, not analysis)
+    url_count = detailed_summary.count('http')
+    if url_count > 10:
+        return True
+    return False
+
 def load_state():
     with open(STATE_FILE) as f:
         return json.load(f)
@@ -54,14 +84,25 @@ def save_state(state):
     with open(STATE_FILE, 'w') as f:
         json.dump(state, f, indent=2, ensure_ascii=False)
 
+def clean_input_text(text: str) -> str:
+    """Strip email boilerplate, tracking links, images, and raw markdown before LLM."""
+    if not text:
+        return ''
+    text = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', text)  # markdown images
+    text = re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', text)  # markdown links keep anchor text
+    text = re.sub(r'https?://\S+', '', text)  # raw urls
+    text = re.sub(r'View in browser|Unsubscribe|Manage preferences|Photo by.*', '', text, flags=re.I)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
 def read_content(item):
     """Get content preview for an item."""
-    fp = item.get('filepath', '')
+    fp = item.get('filepath', '') or item.get('file_path', '')
     has_t = item.get('has_transcript', False)
     if has_t and item.get('transcript_preview'):
-        return item['transcript_preview'][:2000]
+        return clean_input_text(item['transcript_preview'])[:2000]
     if 'content' in item and item['content']:
-        return item['content'][:2000]
+        return clean_input_text(item['content'])[:2000]
     if fp and os.path.exists(fp):
         try:
             with open(fp, 'r', encoding='utf-8') as f:
@@ -70,7 +111,7 @@ def read_content(item):
                 end = text.find('---', 3)
                 if end != -1:
                     text = text[end+3:].strip()
-            return text[:2000]
+            return clean_input_text(text)[:2000]
         except:
             pass
     return ""
@@ -86,9 +127,10 @@ def generate_summaries():
     # Check ALL items — including ones with placeholder summaries
     todo = []
     for i, item in enumerate(state['items']):
-        has_valid = ('summary' in item and item['summary'] and 
+        has_valid = ('summary' in item and item['summary'] and
                      item['summary'].get('detailed_summary') and
-                     '## 一、' in item['summary']['detailed_summary'])
+                     '## 一、' in item['summary']['detailed_summary'] and
+                     not is_summary_garbage(item['summary']['detailed_summary']))
         pub = (item.get('published_date') or '')[:10]
         # Only process if published within last 7 days
         if not has_valid and pub >= cutoff:
@@ -145,6 +187,11 @@ def generate_summaries():
         lang_instruction = 'Use ' + lang + ' throughout the note.'
         
         prompt = 'You are a curator. Generate a structured llm-wiki note. ' + lang_instruction + '\n\n'
+        prompt += 'NON-NEGOTIABLE QUALITY RULES:\n'
+        prompt += '- Do NOT copy raw email HTML, markdown image syntax, tracking URLs, or boilerplate.\n'
+        prompt += '- Do NOT invent generic filler like "This item centers on..." when source detail is thin.\n'
+        prompt += '- If source content is thin, summarize only what title/source clearly supports and say evidence is limited.\n'
+        prompt += '- Output must be analysis, not a pasted source excerpt.\n\n'
         prompt += 'Start with EXACTLY:\n'
         prompt += '---\nsource: ' + url + '\nauthor: ' + author + '\ncreated: ' + pub_date + '\ntype: ' + content_type + '\ntags: [' + tags_hint + ']\nstatus: pending\n---\n\n'
         prompt += 'Then H1 title, then > 摘要：summary in ' + lang + ', then ---, then ## 一、 (Chinese-numbered, 3 sections minimum, 3-5 paragraphs each), then > [!info] 来源 with 原始链接.\n\n'
@@ -158,10 +205,10 @@ def generate_summaries():
                     'Authorization': f'Bearer {MINIMAX_API_KEY}'
                 },
                 json={
-                    'model': 'Best_China',
+                    'model': LLM_MODEL,
                     'messages': [{'role': 'user', 'content': prompt}],
-                    'temperature': 0.7,
-                    'max_tokens': 2048
+                    'temperature': LLM_TEMPERATURE,
+                    'max_tokens': LLM_MAX_TOKENS
                 },
                 timeout=60
             )
@@ -234,6 +281,12 @@ def generate_summaries():
             else:
                 note = output
         
+        # Reject hallucinated/raw-email outputs before saving
+        if is_summary_garbage(note):
+            print(f"⚠️  garbage output rejected (raw links/images/stub detected)", flush=True)
+            print(f"   Output preview: {note[:200]}", flush=True)
+            continue
+
         # Verify it has the required structure
         has_yaml = note.startswith('---')
         has_sections = bool(re.search(r'## [一二三四五六七八九十\d]+[、.]', note))

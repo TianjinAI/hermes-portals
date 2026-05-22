@@ -742,7 +742,7 @@ function render() {
           </div>
           <div class="detailed-content" id="detailed-${item.id}">
             <div class="detailed-summary">
-              ${summary.detailed_summary_html || stripMarkdown(summary.detailed_summary).replace(/\n/g, '<br>')}
+              ${stripMarkdown(summary.detailed_summary).replace(/\n/g, '<br>')}
             </div>
           </div>
         ` : ''}
