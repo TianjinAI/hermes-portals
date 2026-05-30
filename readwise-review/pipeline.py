@@ -14,7 +14,7 @@ from pathlib import Path
 # ⚠️ Absolute path required — systemd sets HOME=/home/admin/.hermes/profiles/tg-bot-c/home
 REVIEW_DIR = "/home/admin/.hermes/readwise_review"
 STATE_FILE = os.path.join(REVIEW_DIR, 'state.json')
-EXPORT_DIR = "/home/admin/.hermes/readwise_export/reader_md"
+EXPORT_DIR = os.path.join(REVIEW_DIR, 'reader_md')
 YOUMIND_SCRIPT = os.path.join(REVIEW_DIR, 'youmind_transcript.py')
 
 def load_state():

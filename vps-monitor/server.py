@@ -394,6 +394,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"VPS Monitor on http://0.0.0.0:{PORT}")
-    HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    print(f"VPS Monitor on http://127.0.0.1:{PORT}")
+    HTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
 

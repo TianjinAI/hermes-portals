@@ -21,6 +21,7 @@ RAW_DIR = DATA_DIR / "raw"
 ARTICLES_DIR = DATA_DIR / "articles"
 KNOWLEDGE_BASE_PATH = DATA_DIR / "knowledge" / "knowledge_base.json"
 WORKBUDDY_DIR = Path("/home/admin/.hermes/workbuddy_reports")
+ROUND3_DIR = DATA_DIR / "round3"
 
 CSS_VARS = """
   :root {
@@ -770,21 +771,83 @@ def build_date_payload(date_str):
         "brief_parsed": brief_parsed,
         "newsletters": newsletters,
         "articles": articles,
+        "round3": load_round3(date_str),
     }
 
 
+def load_round3(date_str):
+    """Load Round 3 merged insights (Hermes + WorkBuddy combined ranking)."""
+    round3_path = ROUND3_DIR / f"{date_str}.json"
+    if not round3_path.exists():
+        return None
+    try:
+        return json.loads(round3_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def load_newsletters(date_str):
-    """Load original raw newsletter emails with full body content."""
+    """Load original raw newsletter emails with full body content.
+    Also resolves bloom.bg tracking URLs to canonical bloomberg.com article URLs."""
+    import subprocess
     newsletters = []
-    digest_json = load_meta(date_str)  # loads 2026-05-01.json
+    digest_json = load_meta(date_str)  # loads YYYY-MM-DD.json
     if not digest_json or "newsletters" not in digest_json:
         return newsletters
+
+    # Pre-resolve tracking URLs from the index json (20 per newsletter, article links)
+    # We follow redirects to get the final bloomberg.com article URL
+    resolved_cache = {}  # tracking_url -> bloomberg.com_url
+    try:
+        index = load_index(date_str) or {}
+        for nl_idx in index.get("newsletters", []):
+            for u in nl_idx.get("urls", []):
+                # Skip already-resolved, non-article URLs, and unsubscribe links
+                if u in resolved_cache:
+                    continue
+                if any(skip in u.lower() for skip in ['unsubscribe', 'preferences', 'forward', 'sign up']):
+                    continue
+                # Skip if already a direct bloomberg.com article URL (not tracking links)
+                if 'bloomberg.com/news' in u or 'bloomberg.com/articles' in u:
+                    continue
+                try:
+                    r = subprocess.run(
+                        ["curl", "-sL", "--max-time", "8", "-o", "/dev/null", "-w", "%{url_effective}", u],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=12
+                    )
+                    effective = r.stdout.decode().strip()
+                    if "bloomberg.com/news" in effective or "bloomberg.com/articles" in effective:
+                        resolved_cache[u] = effective
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     for nl in digest_json["newsletters"]:
         nl_id = nl.get("id", "")
         raw_path = RAW_DIR / "{}_{}.txt".format(date_str, nl_id)
         body_text = ""
         if raw_path.exists():
             body_text = raw_path.read_text(encoding="utf-8", errors="replace")
+
+        # Resolve tracking URLs to bloomberg.com article URLs
+        urls = nl.get("urls", [])
+        resolved_urls = []
+        seen_bloomberg = set()
+        for u in urls:
+            if u in resolved_cache:
+                canonical = resolved_cache[u]
+                if canonical not in seen_bloomberg:
+                    seen_bloomberg.add(canonical)
+                    resolved_urls.append(canonical)
+            elif "bloomberg.com/news" in u or "bloomberg.com/articles" in u:
+                if u not in seen_bloomberg:
+                    seen_bloomberg.add(u)
+                    resolved_urls.append(u)
+        # If no bloomberg.com URLs found, keep the original URLs as fallback
+        if not resolved_urls:
+            resolved_urls = urls
+
         newsletters.append({
             "id": nl_id,
             "subject": nl.get("subject", ""),
@@ -792,7 +855,7 @@ def load_newsletters(date_str):
             "date_local": nl.get("date_local", ""),
             "reporter": nl.get("reporter", ""),
             "newsletter_type": nl.get("newsletter_type", ""),
-            "urls": nl.get("urls", []),
+            "urls": resolved_urls[:20],
             "body": body_text,
         })
     return newsletters
@@ -1407,10 +1470,22 @@ let currentDate = null;
 let currentView = 'brief';
 let selectedHeadline = null;  // index into headlines[] from Brief tab
 let selectedArticle = null;   // direct article index for Brief→Full click-through
+let selectedInsight = null;   // Round 3 insight index for Brief→Full click-through
 const cache = Object.create(null);
 
 function selectHeadline(index) {
   selectedHeadline = index;
+  setView('full');
+}
+
+/* selectInsight: click a Round 3 insight card → jump to Full tab showing insight detail */
+var _round3StoriesCache = [];
+var _round3DataCache = null;
+function selectInsight(index) {
+  if (index < 0 || index >= _round3StoriesCache.length) return;
+  selectedInsight = index;
+  selectedHeadline = null;
+  selectedArticle = null;
   setView('full');
 }
 
@@ -1976,6 +2051,126 @@ async function renderBrief() {
     headlineFeedHtml = `<div class="story-list">${storyHtml}</div>`;
   }
   const updatedLabel = articlesGenerated ? `Updated ${timeAgo(articlesGenerated)}` : '';
+
+  /* ---- Round 3 Merged Insights (Hermes + WorkBuddy) ---- */
+  const round3 = data.round3 || null;
+  _round3DataCache = data;
+  let round3Html = '';
+  if (round3 && round3.top_stories && round3.top_stories.length) {
+    _round3StoriesCache = round3.top_stories;
+    const catColors = {
+      'hidden_risk': 'var(--red)', 'market_structure': 'var(--amber)',
+      'institutional_flow': 'var(--cyan)', 'geopolitical_delay': 'var(--purple)',
+      'geopolitics': 'var(--red)', 'macro': 'var(--green)',
+    };
+    const topCards = round3.top_stories.slice(0, 6).map((story, i) => {
+      const catColor = catColors[story.category] || 'var(--text-secondary)';
+      const score = story.combined_score || 0;
+      const conf = story.confidence ? Math.round(story.confidence * 100) : 0;
+      const r1 = story.round1_surface_score || 0;
+      const r2 = story.round2_insight_score || 0;
+      const snippet = (story.insight_summary || '').substring(0, 140);
+      return `
+        <div onclick="selectInsight(${i})" class="insight-card" style="padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-left:3px solid ${catColor};border-radius:6px;display:flex;flex-direction:column;gap:6px;cursor:pointer">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:20px;font-weight:700;color:${catColor};font-family:var(--mono);min-width:20px">#${story.rank}</span>
+            <span style="font-size:9px;font-weight:500;letter-spacing:0.3px;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:${catColor}15;color:${catColor}">${esc(story.category || 'insight')}</span>
+            <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${score} pts · ${conf}%</span>
+          </div>
+          <div style="font-size:13px;font-weight:500;color:var(--text-primary);line-height:1.35">${esc(story.headline)}</div>
+          <div style="font-size:11px;color:var(--text-muted);line-height:1.4">${esc(snippet)}...</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+            <span style="font-size:9px;color:var(--blue)">R1: ${r1}</span>
+            <span style="font-size:9px;color:var(--purple)">R2: ${r2}</span>
+            ${(story.cross_asset_implications || []).slice(0, 3).map(t => `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--surface-alt);color:var(--text-dim);border:1px solid var(--border)">${esc(t)}</span>`).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const alsoRan = round3.also_ran || [];
+    const alsoRanHtml = alsoRan.length ? `
+      <div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.04);border-radius:6px">
+        <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px">Skipped by Round 2 (${alsoRan.length})</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          ${alsoRan.map(s => `
+            <div style="display:flex;align-items:flex-start;gap:6px">
+              <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;margin-top:1px">✕</span>
+              <span style="font-size:11px;color:var(--text-muted);line-height:1.3">${esc(s.headline)} <span style="font-size:9px;color:var(--text-dim)">— ${esc((s.reason_skipped || '').substring(0, 100))}</span></span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    round3Html = `
+      <div class="section-header" style="margin-top:22px">
+        <div class="section-icon" style="background:var(--purple-bg);color:var(--purple)">🧠</div>
+        <div class="section-title">Top Insights</div>
+        <div class="section-count">Hermes + WorkBuddy · 2-round screening</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));gap:10px;margin-top:8px">
+        ${topCards}
+      </div>
+      ${alsoRanHtml}
+      <div style="margin-top:6px;font-size:10px;color:var(--text-dim);text-align:right;padding-right:4px">R1 = surface impact (Hermes) · R2 = deep insight (WorkBuddy)</div>
+    `;
+  }
+
+  /* ---- Newsletter Listing (all emails with story links) ---- */
+  const newsletters = data.newsletters || [];
+  const newsletterSectionHtml = newsletters.length ? `
+    <div class="section-header" style="margin-top:22px">
+      <div class="section-icon" style="background:var(--blue-bg);color:var(--blue)">📨</div>
+      <div class="section-title">All Newsletters</div>
+      <div class="section-count">${newsletters.length} newsletters · ${currentDate}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+      ${newsletters.map((nl, i) => {
+        const typeColor = (nl.newsletter_type || 'Other').toLowerCase();
+        const badgeColors = {
+          'morning briefing': 'var(--blue)', 'markets daily': 'var(--green)',
+          'technology': 'var(--cyan)', 'politics': 'var(--purple)',
+          'crypto': 'var(--amber)', 'geopolitics': 'var(--red)',
+          'macro': 'var(--amber)', 'asia markets': 'var(--accent)',
+          'weekend': 'var(--text-muted)', 'etf iq': 'var(--up)',
+          'going private': 'var(--purple)', 'the forecast': 'var(--accent)',
+          'subscriber insider': 'var(--text-secondary)',
+        };
+        const bColor = badgeColors[typeColor] || 'var(--text-secondary)';
+        const bBg = bColor.replace(')', '-bg)').replace('var(--', 'var(--');
+        const timeStr = nl.date_local ? nl.date_local.split(' ')[1] || '' : '';
+        const reporterStr = nl.reporter ? ' · ' + esc(nl.reporter) : '';
+        // Build article links (up to 12, bloomberg.com only)
+        const articleLinks = (nl.urls || []).filter(u => u.includes('bloomberg.com/news') || u.includes('bloomberg.com/articles')).slice(0, 12);
+        const linksHtml = articleLinks.length ? `
+          <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px">
+            ${articleLinks.map(u => {
+              // Extract clean headline-ish label from URL path
+              let label = u;
+              try {
+                const path = new URL(u).pathname;
+                const slug = path.split('/').pop() || '';
+                label = slug.replace(/-/g, ' ').replace(/\?.*/, '').substring(0, 50);
+                if (!label) label = 'Article';
+              } catch(e) { label = 'Article'; }
+              return `<a href="${esc(u)}" target="_blank" rel="noopener" class="bc-link" onclick="event.stopPropagation()" style="font-size:10px;padding:2px 6px;background:var(--surface-alt);border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);text-decoration:none">📎 ${esc(label.substring(0,40))}</a>`;
+            }).join('')}
+          </div>` : '';
+        return `
+          <div class="sidebar-card" style="cursor:default;display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-left:2px solid ${bColor}">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:${bColor}18;color:${bColor};border:1px solid ${bColor}44;white-space:nowrap">${esc(nl.newsletter_type || nl.subject)}</span>
+              ${timeStr ? `<span style="font-size:11px;color:var(--text-muted);font-family:var(--mono)">${timeStr}</span>` : ''}
+              <span style="font-size:12px;color:var(--text-secondary);font-weight:500">${esc(nl.subject)}</span>
+              ${nl.reporter ? `<span style="font-size:11px;color:var(--text-muted)">by ${esc(nl.reporter)}</span>` : ''}
+            </div>
+            ${linksHtml}
+          </div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:6px;font-size:11px;color:var(--text-muted);text-align:right">Click any 📎 link to open article on Bloomberg →</div>
+  ` : '';
   document.getElementById('content').innerHTML = `
     ${breakingHeroHtml}
     ${headlineFeedHtml}
@@ -1987,6 +2182,8 @@ async function renderBrief() {
     <div class="card"><div class="watch-grid">${watchHtml}</div></div>
     ${quickHtml}
     ${bottomLine}
+    ${round3Html}
+    ${newsletterSectionHtml}
   `;
 }
 
@@ -2004,6 +2201,86 @@ async function renderFull() {
   const newsletters = data.newsletters || [];
   const articlesData = data.articles || null;
   const articles = Array.isArray(articlesData) ? articlesData : (articlesData && articlesData.articles) || [];
+
+  // ---- Insight detail view (from Brief → Top Insights click) ----
+  if (selectedInsight !== null && selectedInsight >= 0 && selectedInsight < _round3StoriesCache.length) {
+    var story = _round3StoriesCache[selectedInsight];
+    var selInsIdx = selectedInsight;
+    selectedInsight = null;
+
+    var insightCatColor = getCategoryColor(story.category);
+    var fullAnalysis = story.insight_summary || story.why_important || '';
+    var crossAssets = story.cross_asset_implications || [];
+    var sourceNl = story.source_newsletter || '';
+
+    // Find related articles from source newsletter
+    var relatedUrls = [];
+    if (data.newsletters) {
+      var srcNl = data.newsletters.find(function(n) {
+        return n.subject === sourceNl || n.newsletter_type === sourceNl;
+      });
+      if (srcNl && srcNl.urls) {
+        relatedUrls = srcNl.urls.filter(function(u) {
+          return u.indexOf('bloomberg.com/news') >= 0 || u.indexOf('bloomberg.com/articles') >= 0;
+        });
+      }
+    }
+
+    // Build article cards
+    var articleCardsHtml = relatedUrls.map(function(url) {
+      var label = url;
+      try {
+        var path = new URL(url).pathname;
+        var parts = path.split('/').filter(Boolean);
+        var slug = parts[parts.length - 1] || '';
+        label = slug.replace(/-/g, ' ');
+        if (!label || label.length < 5) label = parts.slice(-2).join(' ').replace(/-/g, ' ');
+        if (!label) label = 'Article';
+        label = label.replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+      } catch(e) { label = 'Article'; }
+      return '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="story-link-item" style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:6px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary);text-decoration:none;line-height:1.4">' +
+        '<span style="opacity:0.3;font-size:11px;flex-shrink:0;margin-top:2px">\u2197</span>' +
+        '<div style="display:flex;flex-direction:column;gap:2px">' +
+          '<span style="font-size:13px;color:var(--text-primary);font-weight:500">' + esc(label.substring(0, 120)) + '</span>' +
+          '<span style="font-size:10px;color:var(--text-dim);word-break:break-all">' + esc(url.substring(0, 100)) + '</span>' +
+        '</div>' +
+      '</a>';
+    }).join('');
+
+    document.getElementById('content').innerHTML =
+      '<div style="margin-bottom:20px"><a href="javascript:void(0)" onclick="selectedInsight=null;renderFull()" style="color:var(--accent);text-decoration:none;font-size:13px">\u2190 Back to all</a></div>' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">' +
+        '<span style="font-size:9px;font-weight:500;letter-spacing:0.3px;text-transform:uppercase;padding:3px 8px;border-radius:3px;background:' + insightCatColor + '15;color:' + insightCatColor + '">' + esc(story.category || 'insight') + '</span>' +
+        '<span style="font-size:12px;color:var(--text-muted)">' + (story.combined_score || 0) + ' pts</span>' +
+      '</div>' +
+      '<h1 style="font-size:22px;font-weight:600;color:var(--text-primary);line-height:1.3;margin-bottom:20px">' + esc(story.headline) + '</h1>' +
+
+      // WorkBuddy insight — the main content
+      '<div style="padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:20px">' +
+        '<div style="font-size:11px;color:var(--purple);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:10px">🧠 WorkBuddy Insight</div>' +
+        '<div style="font-size:15px;color:var(--text);line-height:1.8;white-space:pre-wrap">' + esc(fullAnalysis) + '</div>' +
+      '</div>' +
+
+      // Cross-asset implications
+      (crossAssets.length ?
+        '<div style="margin-bottom:20px">' +
+          '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:8px">Cross-Asset Implications</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            crossAssets.map(function(t) { return '<span style="font-size:12px;padding:4px 10px;border-radius:4px;background:var(--surface-alt);color:var(--text-secondary);border:1px solid var(--border)">' + esc(t) + '</span>'; }).join('') +
+          '</div>' +
+        '</div>' : '') +
+
+      // Related Bloomberg articles
+      (relatedUrls.length ?
+        '<div style="margin-bottom:20px">' +
+          '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:10px">Related Stories (' + relatedUrls.length + ')</div>' +
+          '<div style="display:flex;flex-direction:column;gap:8px">' + articleCardsHtml + '</div>' +
+        '</div>' : '') +
+
+      // Source
+      (sourceNl ? '<div style="font-size:12px;color:var(--text-dim);margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">Source: ' + esc(sourceNl) + ' newsletter</div>' : '');
+    return;
+  }
 
   // ---- Direct article view (from Brief card click) ----
   if (selectedArticle !== null && selectedArticle >= 0 && selectedArticle < articles.length) {

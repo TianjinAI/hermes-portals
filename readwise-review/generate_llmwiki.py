@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate llm-wiki format summaries for portal items using 9Router/Power_Light.
+Generate llm-wiki format summaries for portal items using Deepseek API.
 Target format: In_Process style with YAML frontmatter + numbered sections.
 """
 

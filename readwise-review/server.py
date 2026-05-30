@@ -14,7 +14,7 @@ import urllib.parse
 from datetime import datetime
 
 PORT = 5054
-REVIEW_DIR = os.path.expanduser('~/.hermes/readwise_review')
+REVIEW_DIR = '/home/admin/.hermes/readwise_review'
 STATE_FILE = os.path.join(REVIEW_DIR, 'state.json')
 IGNORE_FILE = os.path.join(REVIEW_DIR, 'ignore_list.json')
 VAULT_PATH = os.path.expanduser('~/Second_Brain')
