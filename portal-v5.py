@@ -2164,59 +2164,8 @@ async function renderFull() {
     var invalidation = story.invalidation_conditions || [];
     var timeHorizon = story.time_horizon || '';
 
-    // Find related articles by keyword matching across ALL newsletters
-    var relatedUrls = [];
-    var storyKeywords = [];
-    // Extract keywords from headline
-    var headlineWords = (story.headline || '').toLowerCase().split(/\s+/).filter(function(w) {
-      return w.length > 3 && !['says','after','from','with','for','the','and','that','this','have','will','would','could','should','about','into','over','than','their','more','what','when','where','which','while','some','been','being','were','they','them','these','those','only','even','just','also','back','down','such','each','many','most','much','very','well','were','been','have','has','had','does','did','doing','done','made','make','makes','making','take','takes','taken','taking','come','comes','coming','came','give','gives','giving','gave','get','gets','getting','got','see','sees','seeing','saw','know','knows','knowing','knew','think','thinks','thinking','thought','look','looks','looking','looked','use','uses','using','used','find','finds','finding','found','want','wants','wanted','wanting','give','gives','giving','gave','work','works','working','worked','call','calls','calling','called','try','tries','trying','tried','need','needs','needing','needed','feel','feels','feeling','felt','become','becomes','becoming','became','leave','leaves','leaving','left','put','puts','putting','mean','means','meaning','meant','keep','keeps','keeping','kept','let','lets','letting','begin','begins','beginning','began','seem','seems','seeming','seemed','help','helps','helping','helped','show','shows','showing','showed','hear','hears','hearing','heard','play','plays','playing','played','run','runs','running','ran','move','moves','moving','moved','live','lives','living','lived','believe','believes','believing','believed','hold','holds','holding','held','bring','brings','bringing','brought','happen','happens','happening','happened','stand','stands','standing','stood','lose','loses','losing','lost','pay','pays','paying','paid','meet','meets','meeting','met','include','includes','including','included','continue','continues','continuing','continued','set','sets','setting','learn','learns','learning','learned','change','changes','changing','changed','lead','leads','leading','led','understand','understands','understanding','understood','watch','watches','watching','watched','follow','follows','following','followed','stop','stops','stopping','stopped','create','creates','creating','created','speak','speaks','speaking','spoke','read','reads','reading','allow','allows','allowing','allowed','add','adds','adding','added','spend','spends','spending','spent','grow','grows','growing','grew','open','opens','opening','opened','walk','walks','walking','walked','win','wins','winning','won','offer','offers','offering','offered','remember','remembers','remembering','remembered','love','loves','loving','loved','consider','considers','considering','considered','appear','appears','appearing','appeared','buy','buys','buying','bought','wait','waits','waiting','waited','serve','serves','serving','served','die','dies','dying','died','send','sends','sending','sent','expect','expects','expecting','expected','build','builds','building','built','stay','stays','staying','stayed','fall','falls','falling','fell','cut','cuts','cutting','reach','reaches','reaching','reached','kill','kills','killing','killed','remain','remains','remaining','remained','suggest','suggests','suggesting','suggested','raise','raises','raising','raised','pass','passes','passing','passed','sell','sells','selling','sold','require','requires','requiring','required','report','reports','reporting','reported','decide','decides','deciding','decided','pull','pulls','pulling','pulled','return','returns','returning','returned','explain','explains','explaining','explained','carry','carries','carrying','carried','develop','develops','developing','developed','hope','hopes','hoping','hoped','drive','drives','driving','drove','break','breaks','breaking','broke','receive','receives','receiving','received','agree','agrees','agreeing','agreed','support','supports','supporting','supported','remove','removes','removing','removed','return','returns','returning','returned','describe','describes','describing','described','lie','lies','lying','lay','discover','discovers','discovering','discovered','contain','contains','containing','contained','establish','establishes','establishing','established','join','joins','joining','joined','seek','seeks','seeking','sought','share','shares','sharing','shared','arrive','arrives','arriving','arrived','say','says','saying','said','last','lasts','lasting','lasted','declare','declares','declaring','declared','attack','attacks','attacking','attacked','claim','claims','claiming','claimed','prove','proves','proving','proved','state','states','stating','stated','feel','feels','feeling','felt','point','points','pointing','pointed','start','starts','starting','started','ask','asks','asking','asked','seem','seems','seeming','seemed','turn','turns','turning','turned','hand','hands','handing','handed','place','places','placing','placed','face','faces','facing','faced','case','cases','fact','facts','group','groups','company','companies','government','governments','number','numbers','world','worlds','part','parts','area','areas','point','points','problem','problems','school','schools','state','states','family','families','student','students','country','countries','water','waters','issue','issues','member','members','power','powers','level','levels','office','offices','result','results','reason','reasons','research','researches','moment','moments','parent','parents','person','persons','health','healths','others','other','force','forces','policy','policies','process','processes','nation','nations','nature','natures','society','societies','story','stories','industry','industries','media','medias','player','players','record','records','paper','papers','space','spaces','ground','grounds','support','supports','event','events','official','officials','leader','leaders','light','lights','voice','voices','couple','couples','street','streets','price','prices','project','projects','product','products','service','services','market','markets','court','courts','sense','senses','effect','effects','class','classes','development','developments','side','sides','teacher','teachers','hour','hours','rate','rates','month','months','morning','mornings','field','fields','death','deaths','drug','drugs','city','cities','team','teams','player','players','game','games','food','foods','age','ages','job','jobs','business','businesses','issue','issues','case','cases','group','groups','number','numbers','part','parts','area','areas','place','places','point','points','problem','problems','fact','facts','right','rights','program','programs','question','questions','government','governments','company','companies','hand','hands','party','parties','school','schools','country','countries','head','heads','house','houses','friend','friends','parent','parents','night','nights','information','informations','eye','eyes','way','ways','day','days','man','men','woman','women','child','children','time','times','year','years','week','weeks','work','works','life','lives','world','worlds','system','systems','program','programs','problem','problems','state','states','case','cases','point','points','government','governments','number','numbers','group','groups','company','companies','problem','problems','hand','hands','part','parts','place','places','week','weeks','case','cases','system','systems','program','programs','question','questions','work','works','government','governments','number','numbers','night','nights','point','points','home','homes','water','waters','room','rooms','mother','mothers','area','areas','money','moneys','story','stories','fact','facts','month','months','lot','lots','right','rights','study','studies','book','books','eye','eyes','job','jobs','word','words','business','businesses','issue','issues','side','sides','kind','kinds','four','head','heads','far','long','both','little','own','under','last','never','next','during','again','further','then','once','here','there','when','where','why','how','all','any','both','each','few','more','most','other','some','such','no','nor','not','only','own','same','so','than','too','very','can','will','just','should','now'].indexOf(w) < 0;
-    });
-    // Add cross-asset implications as keywords
-    (story.cross_asset_implications || []).forEach(function(imp) {
-      imp.toLowerCase().split(/\s+/).forEach(function(w) {
-        if (w.length > 3) storyKeywords.push(w);
-      });
-    });
-    storyKeywords = storyKeywords.concat(headlineWords);
-
-    // Score all article URLs across all newsletters by keyword match
-    var allArticleUrls = [];
-    if (data.newsletters) {
-      data.newsletters.forEach(function(nl) {
-        if (nl.urls) {
-          nl.urls.forEach(function(u) {
-            if (u.indexOf('bloomberg.com/news') >= 0 || u.indexOf('bloomberg.com/articles') >= 0) {
-              allArticleUrls.push(u);
-            }
-          });
-        }
-      });
-    }
-    // Deduplicate
-    var seenUrls = {};
-    allArticleUrls = allArticleUrls.filter(function(u) {
-      if (seenUrls[u]) return false;
-      seenUrls[u] = true;
-      return true;
-    });
-    // Score and sort by relevance
-    var scoredUrls = allArticleUrls.map(function(url) {
-      var score = 0;
-      var urlLower = url.toLowerCase();
-      storyKeywords.forEach(function(kw) {
-        if (urlLower.indexOf(kw) >= 0) score += 1;
-      });
-      // Boost if from source newsletter
-      if (sourceNl && urlLower.indexOf(sourceNl.toLowerCase().replace(/\s+/g, '-')) >= 0) {
-        score += 2;
-      }
-      return { url: url, score: score };
-    }).filter(function(item) {
-      return item.score > 0; // Only include if at least one keyword matches
-    }).sort(function(a, b) {
-      return b.score - a.score;
-    });
-    relatedUrls = scoredUrls.slice(0, 8).map(function(item) { return item.url; });
+    // Use pre-computed related_urls from Round 3 data (server-side matching)
+    var relatedUrls = story.related_urls || [];
 
     // Build article cards
     var articleCardsHtml = relatedUrls.map(function(url) {
