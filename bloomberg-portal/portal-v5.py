@@ -2012,7 +2012,7 @@ async function renderBrief() {
       const conf = story.confidence ? Math.round(story.confidence * 100) : 0;
       const r1 = story.round1_surface_score || 0;
       const r2 = story.round2_insight_score || 0;
-      const snippet = (story.insight_summary || '').substring(0, 140);
+      const snippet = (story.short_summary || story.insight_summary || '').substring(0, 180);
       return `
         <div onclick="selectInsight(${i})" class="insight-card" style="padding:14px 16px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-left:3px solid ${catColor};border-radius:6px;display:flex;flex-direction:column;gap:6px;cursor:pointer">
           <div style="display:flex;align-items:center;gap:8px">
@@ -2160,6 +2160,9 @@ async function renderFull() {
     var fullAnalysis = story.insight_summary || story.why_important || '';
     var crossAssets = story.cross_asset_implications || [];
     var sourceNl = story.source_newsletter || '';
+    var keyTickers = story.key_tickers || [];
+    var invalidation = story.invalidation_conditions || [];
+    var timeHorizon = story.time_horizon || '';
 
     // Find related articles by keyword matching across ALL newsletters
     var relatedUrls = [];
@@ -2256,6 +2259,31 @@ async function renderFull() {
           '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:8px">Cross-Asset Implications</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
             crossAssets.map(function(t) { return '<span style="font-size:12px;padding:4px 10px;border-radius:4px;background:var(--surface-alt);color:var(--text-secondary);border:1px solid var(--border)">' + esc(t) + '</span>'; }).join('') +
+          '</div>' +
+        '</div>' : '') +
+
+      // Key Tickers
+      (keyTickers.length ?
+        '<div style="margin-bottom:20px">' +
+          '<div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:8px">Key Tickers</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            keyTickers.map(function(t) { return '<span style="font-size:12px;padding:4px 10px;border-radius:4px;background:var(--accent-primary-bg);color:var(--accent-primary);border:1px solid var(--accent);font-weight:600;font-family:var(--mono)">' + esc(t) + '</span>'; }).join('') +
+          '</div>' +
+        '</div>' : '') +
+
+      // Time Horizon
+      (timeHorizon ?
+        '<div style="margin-bottom:20px;padding:12px 16px;background:var(--surface-alt);border:1px solid var(--border);border-radius:6px">' +
+          '<div style="font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px;font-weight:600">Time Horizon</div>' +
+          '<div style="font-size:14px;color:var(--text-secondary);line-height:1.5">' + esc(timeHorizon) + '</div>' +
+        '</div>' : '') +
+
+      // Invalidation Conditions
+      (invalidation.length ?
+        '<div style="margin-bottom:20px;padding:12px 16px;background:rgba(255,0,0,0.03);border:1px solid rgba(255,0,0,0.1);border-radius:6px">' +
+          '<div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:8px;font-weight:600">Invalidation Conditions</div>' +
+          '<div style="display:flex;flex-direction:column;gap:6px">' +
+            invalidation.map(function(c) { return '<div style="display:flex;align-items:flex-start;gap:8px"><span style="font-size:11px;color:var(--red);flex-shrink:0;margin-top:2px">\u2716</span><span style="font-size:13px;color:var(--text-secondary);line-height:1.4">' + esc(c) + '</span></div>'; }).join('') +
           '</div>' +
         '</div>' : '') +
 
